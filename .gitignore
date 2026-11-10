@@ -1,0 +1,21 @@
+# Rust
+target/
+Cargo.lock
+
+# Node
+node_modules/
+dist/
+coverage/
+pnpm-debug.log*
+
+# Logs
+*.log
+
+# Editor and OS
+.DS_Store
+.idea/
+.vscode/
+
+# Environment
+.env
+.env.*

@@ -1,0 +1,138 @@
+# Query builder design
+
+Both projects expose one public build function and return SQL plus bind
+parameters. Nothing connects to a database or executes a statement.
+
+| Project | Entry point |
+| --- | --- |
+| Rust | `datagrid_query_rs::build_query(&QueryOptions) -> Result<BuiltQuery, QueryError>` |
+| TypeScript | `buildQuery(options: QueryOptions): BuiltQuery` |
+
+`BuiltQuery` contains `sql` and `params`. The generated statement has no
+trailing semicolon.
+
+## Source
+
+A query has exactly one source:
+
+- A table name with an optional schema.
+- A sub-select with a required alias and optional bind parameters.
+
+Table, schema, and alias names are identifiers. They must match
+`^[A-Za-z_][A-Za-z0-9_]*$` and are always double-quoted.
+
+Sub-select SQL is trusted developer input and is inserted verbatim inside
+parentheses. Its parameters are passed before any outer parameters, so a
+sub-select using `$1` makes the first outer filter use `$2`. Sub-select
+parameters are expected to be numbered from `$1` and to match the SQL.
+
+## Columns
+
+An empty column list selects `*`. A column can be a plain name or a name with an
+alias. Filter and sort columns refer to the source's column names, not to
+select-list aliases.
+
+## Filters
+
+The top-level filter list is joined with `AND`. A condition can be wrapped in a
+group to build nested `AND` / `OR` expressions. An empty `AND` group becomes
+`TRUE`; an empty `OR` group becomes `FALSE`. An empty top-level list produces no
+`WHERE` clause.
+
+| Operator | SQL | Value |
+| --- | --- | --- |
+| `eq` | `=` | Scalar; `null` or missing becomes `IS NULL` |
+| `neq` | `<>` | Scalar; `null` or missing becomes `IS NOT NULL` |
+| `gt`, `gte`, `lt`, `lte` | `>`, `>=`, `<`, `<=` | Required non-null scalar |
+| `like`, `ilike` | `LIKE`, `ILIKE` | Required non-null pattern |
+| `notLike`, `notIlike` | `NOT LIKE`, `NOT ILIKE` | Required non-null pattern |
+| `in`, `notIn` | `IN`, `NOT IN` | Required array; expanded to one parameter per item |
+| `any`, `notAny` | `= ANY`, `<> ALL` | Required array; passed as one array parameter |
+| `isNull`, `isNotNull` | `IS NULL`, `IS NOT NULL` | Ignored |
+| `between`, `notBetween` | `BETWEEN`, `NOT BETWEEN` | Required array of exactly two values |
+
+An empty `in` list becomes `FALSE`, and an empty `notIn` list becomes `TRUE`.
+`any` and `notAny` keep the array as a single parameter, so their SQL has one
+placeholder regardless of list length.
+
+All values become numbered bind parameters. The builder does not escape or
+rewrite `LIKE` patterns; callers own `%` and `_` semantics.
+
+## Filtering by an array of IDs
+
+Use `any` to pass the array as one parameter and render `= ANY($n)`:
+
+```ts
+buildQuery({
+  table: "people",
+  filters: [{ column: "id", operator: "any", value: [1, 2, 3] }],
+});
+// SELECT * FROM "people" WHERE "id" = ANY($1)
+// params: [[1, 2, 3]]
+```
+
+```rust
+let options = QueryOptions {
+    source: QuerySource::Table {
+        schema: None,
+        name: "people".to_owned(),
+    },
+    columns: Vec::new(),
+    filters: vec![Filter::Condition(FilterCondition {
+        column: "id".to_owned(),
+        operator: FilterOperator::Any,
+        value: Some(Value::Array(vec![
+            Value::Int(1),
+            Value::Int(2),
+            Value::Int(3),
+        ])),
+    })],
+    sort: Vec::new(),
+    limit: None,
+    offset: None,
+};
+
+let query = build_query(&options).unwrap();
+assert_eq!(
+    query.sql,
+    r#"SELECT * FROM "people" WHERE "id" = ANY($1)"#
+);
+assert_eq!(
+    query.params,
+    vec![Value::Array(vec![
+        Value::Int(1),
+        Value::Int(2),
+        Value::Int(3),
+    ])]
+);
+```
+
+Use `in` instead when you want one placeholder per ID: `id IN ($1, $2, $3)`.
+Use `notAny` for `id <> ALL($1)`.
+
+## Sorting
+
+Every sort entry names a source column and an optional direction (`asc` by
+default) and nulls order (`first` or `last`). Sorts are emitted in the given
+order.
+
+## Pagination
+
+`limit` and `offset` are optional non-negative integers. TypeScript rejects
+values that are not safe integers. Rust represents them as `u64`. The builder
+emits `LIMIT` and `OFFSET` only when a value is present.
+
+## Security model
+
+- Identifiers are validated and quoted, so table, column, and alias names cannot
+  inject SQL.
+- Values are never interpolated into the statement; they are returned in
+  `params` for the caller to bind.
+- Raw sub-select SQL is trusted. Do not pass end-user text as sub-select SQL.
+- The caller still needs to apply authorization and row-level rules.
+
+## Parity
+
+Both implementations use the same SQL shape and the same operator semantics.
+Their test suites cover the same cases, including parameter offsets after a
+sub-select, nested filter groups, empty `IN` lists, and identifier validation.

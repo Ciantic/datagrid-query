@@ -1,0 +1,11 @@
+[package]
+name = "datagrid-query-rs"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+description = "Query builder for data grids"
+license = "MIT"
+keywords = ["datagrid", "query-builder", "sql"]
+categories = ["database"]
+
+[dependencies]
