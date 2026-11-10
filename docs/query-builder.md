@@ -136,7 +136,7 @@ Rust `QueryOptions` and `MutationOptions` implement serde `Serialize` and
 TypeScript caller can serialize its options directly:
 
 ```ts
-import type { QueryOptions } from "datagrid-query-ts";
+import type { QueryOptions } from "datagrid-query";
 
 const options = {
   table: "people",
@@ -152,7 +152,7 @@ const json = JSON.stringify(options);
 The Rust side deserializes that JSON and builds the query:
 
 ```rust
-use datagrid_query_rs::{build_query, QueryOptions};
+use datagrid_query::{build_query, QueryOptions};
 
 let options: QueryOptions = serde_json::from_str(&json)?;
 let query = build_query(&options)?;

@@ -4,7 +4,7 @@
 mod shared;
 pub(crate) use shared::*;
 
-use datagrid_query_rs::{BuiltMutation, BuiltQuery, MutationRow, QueryOptions, Value, build_query};
+use datagrid_query::{BuiltMutation, BuiltQuery, MutationRow, QueryOptions, Value, build_query};
 use postgres::types::ToSql;
 use postgres::{Client, NoTls, Row};
 use std::collections::BTreeMap;

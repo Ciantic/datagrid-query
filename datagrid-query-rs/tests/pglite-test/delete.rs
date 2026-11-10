@@ -1,4 +1,4 @@
-use datagrid_query_rs::{Value, build_delete};
+use datagrid_query::{Value, build_delete};
 
 mod support;
 use support::{

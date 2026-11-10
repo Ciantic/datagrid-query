@@ -1,4 +1,4 @@
-use datagrid_query_rs::{Value, build_upsert};
+use datagrid_query::{Value, build_upsert};
 
 mod support;
 use support::{

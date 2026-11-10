@@ -1,4 +1,4 @@
-# datagrid-query-rs
+# datagrid_query
 
 Rust query builder for data grids. It builds parameterised `SELECT`, `INSERT`,
 `UPDATE`, `UPSERT`, and `DELETE` statements. It does not execute anything.
@@ -25,7 +25,7 @@ integration tests in `tests/pglite-test/`.
 ## Usage
 
 ```rust
-use datagrid_query_rs::{
+use datagrid_query::{
     build_query, Filter, FilterCondition, FilterOperator, QueryOptions, QuerySource,
     SelectColumn, Sort, SortDirection, Value,
 };
@@ -74,7 +74,7 @@ rows: omitted fields keep their existing values, while explicit `null` writes
 PostgreSQL 17 or newer.
 
 ```rust
-use datagrid_query_rs::{
+use datagrid_query::{
     bind_mutation_rows, build_insert, MutationColumn, MutationOptions, MutationRow, Value,
 };
 
@@ -123,8 +123,8 @@ expressions are trusted input.
 serialized on the TypeScript side can be deserialized and reused directly:
 
 ```rust
-let options: datagrid_query_rs::QueryOptions = serde_json::from_str(&json)?;
-let query = datagrid_query_rs::build_query(&options)?;
+let options: datagrid_query::QueryOptions = serde_json::from_str(&json)?;
+let query = datagrid_query::build_query(&options)?;
 ```
 
 Optional fields may be omitted, filter operators use the TypeScript names,

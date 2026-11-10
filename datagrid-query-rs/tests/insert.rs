@@ -1,4 +1,4 @@
-use datagrid_query_rs::{
+use datagrid_query::{
     BuiltMutation, MutationOptions, QueryError, Value, bind_mutation_rows, build_insert,
 };
 mod support;

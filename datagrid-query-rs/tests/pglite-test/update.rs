@@ -1,4 +1,4 @@
-use datagrid_query_rs::{Value, build_update};
+use datagrid_query::{Value, build_update};
 
 mod support;
 use support::{

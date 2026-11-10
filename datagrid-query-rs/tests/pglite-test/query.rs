@@ -1,4 +1,4 @@
-use datagrid_query_rs::{
+use datagrid_query::{
     Combinator, Filter, FilterCondition, FilterGroup, FilterOperator, QueryOptions, QuerySource,
     SelectColumn, Sort, SortDirection, SubquerySource, Value,
 };

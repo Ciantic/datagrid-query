@@ -1,4 +1,4 @@
-use datagrid_query_rs::{MutationOptions, Value, build_upsert};
+use datagrid_query::{MutationOptions, Value, build_upsert};
 mod support;
 use support::{bind, mutation_column as column, mutation_row as row, text, widget_options};
 

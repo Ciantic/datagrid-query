@@ -1,4 +1,4 @@
-use datagrid_query_rs::{Value, build_merge};
+use datagrid_query::{Value, build_merge};
 
 mod support;
 use support::{

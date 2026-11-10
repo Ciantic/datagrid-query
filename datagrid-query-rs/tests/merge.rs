@@ -1,4 +1,4 @@
-use datagrid_query_rs::{MutationOptions, Value, build_merge};
+use datagrid_query::{MutationOptions, Value, build_merge};
 mod support;
 use support::{bind, merge_widget_options, mutation_row as row, text};
 

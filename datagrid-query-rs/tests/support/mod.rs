@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use datagrid_query_rs::{
+use datagrid_query::{
     BuiltMutation, MutationColumn, MutationOptions, MutationRow, Value, bind_mutation_rows,
 };
 use std::collections::BTreeMap;

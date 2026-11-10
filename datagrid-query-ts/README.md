@@ -1,4 +1,4 @@
-# datagrid-query-ts
+# datagrid-query
 
 TypeScript query builder for data grids, tested against real PostgreSQL via
 [PGlite](https://pglite.dev). It builds parameterised `SELECT`, `INSERT`,
@@ -23,7 +23,7 @@ pnpm typecheck
 ## Usage
 
 ```ts
-import { buildQuery } from "datagrid-query-ts";
+import { buildQuery } from "datagrid-query";
 import { PGlite } from "@electric-sql/pglite";
 
 const { sql, params } = buildQuery({
@@ -62,7 +62,7 @@ import {
   buildUpsert,
   buildMerge,
   buildDelete,
-} from "datagrid-query-ts";
+} from "datagrid-query";
 
 const options = {
   table: "people",

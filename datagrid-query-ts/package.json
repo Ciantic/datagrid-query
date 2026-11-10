@@ -1,5 +1,5 @@
 {
-  "name": "datagrid-query-ts",
+  "name": "datagrid-query",
   "version": "0.0.0",
   "description": "TypeScript query builder for data grids",
   "type": "module",
