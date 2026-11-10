@@ -1,9 +1,8 @@
 # datagrid-query-ts
 
 TypeScript query builder for data grids, tested against real PostgreSQL via
-[PGlite](https://pglite.dev). It turns a table or sub-select, selected columns,
-filters, sorting, and pagination into a parameterised `SELECT` statement. It does
-not execute anything.
+[PGlite](https://pglite.dev). It builds parameterised `SELECT`, `INSERT`,
+`UPDATE`, `UPSERT`, and `DELETE` statements. It does not execute anything.
 
 ## Requirements
 
@@ -51,14 +50,47 @@ const query = buildQuery({
 });
 ```
 
-`buildQuery` is the only runtime export; all other exports are types. Invalid
-input throws an error named `QueryError`. Identifiers are validated against
-`^[A-Za-z_][A-Za-z0-9_]*$` and quoted; user values are returned as bind
-parameters. Sub-select SQL is trusted input.
+## Mutations
 
-The options accepted by `buildQuery` use the same JSON shape as the Rust
-`QueryOptions` serde representation, so `JSON.stringify(options)` can be sent to
-the Rust implementation and deserialized there.
+```ts
+import { buildInsert, buildUpdate, buildUpsert, buildDelete } from "datagrid-query-ts";
+
+const options = {
+  table: "people",
+  columns: [
+    { name: "id", type: "uuid", insertDefaultSql: "uuidv7()" },
+    { name: "name", type: "text" },
+    { name: "updatedAt", type: "timestamptz", updateDefaultSql: "now()" },
+    { name: "version", type: "int8", insertDefaultSql: "0" },
+  ],
+  primaryKey: ["id"],
+  versionColumn: "version",
+  rows: [{ name: "Ada" }],
+};
+
+const insert = buildInsert(options);
+const update = buildUpdate(options);
+const upsert = buildUpsert(options);
+const remove = buildDelete(options);
+```
+
+Mutation rows are partial. `insertDefaultSql` and `updateDefaultSql` control
+fallbacks for missing values, and `#present` boolean arrays carry presence
+through `unnest`.
+
+`buildQuery`, `buildInsert`, `buildUpdate`, `buildUpsert`, and `buildDelete` are
+the runtime exports; all other exports are types. Invalid input throws an error
+named `QueryError`. Identifiers are validated against
+`^[A-Za-z_][A-Za-z0-9_]*$` and quoted; user values are returned as bind
+parameters. Sub-select SQL and default SQL expressions are trusted input.
+
+The options accepted by the builders use the same JSON shape as the Rust serde
+representations, so `JSON.stringify(options)` can be sent to the Rust
+implementation and deserialized there.
+
+The implementation is split by operation in `src/query.ts`, `src/insert.ts`,
+`src/update.ts`, `src/upsert.ts`, and `src/delete.ts`, with shared helpers in
+`src/shared.ts` and `src/mutation.ts`.
 
 See [../docs/query-builder.md](../docs/query-builder.md) for the shared query
 model and operator semantics.

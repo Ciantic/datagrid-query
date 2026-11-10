@@ -1,8 +1,7 @@
 # datagrid-query-rs
 
-Rust query builder for data grids. It turns a table or sub-select, selected
-columns, filters, sorting, and pagination into a parameterised `SELECT`
-statement. It does not execute anything.
+Rust query builder for data grids. It builds parameterised `SELECT`, `INSERT`,
+`UPDATE`, `UPSERT`, and `DELETE` statements. It does not execute anything.
 
 ## Development
 
@@ -61,23 +60,74 @@ assert_eq!(
 assert_eq!(query.params, vec![Value::Int(18)]);
 ```
 
-`build_query` is the only public function. Identifiers are validated against
-`^[A-Za-z_][A-Za-z0-9_]*$` and quoted; user values are returned as bind
-parameters. Sub-select SQL is trusted input.
+## Mutations
+
+`build_insert`, `build_update`, `build_upsert`, and `build_delete` share
+`MutationOptions`. Rows are partial, and missing values use either a configured
+SQL default expression or the existing column value for updates.
+
+```rust
+use datagrid_query_rs::{
+    build_insert, MutationColumn, MutationOptions, MutationRow, Value,
+};
+
+let mut row = MutationRow::new();
+row.insert("name".to_owned(), Value::Text("Ada".to_owned()));
+
+let options = MutationOptions {
+    table: "people".to_owned(),
+    schema: None,
+    columns: vec![
+        MutationColumn {
+            name: "id".to_owned(),
+            data_type: "uuid".to_owned(),
+            insert_default_sql: Some("uuidv7()".to_owned()),
+            ..Default::default()
+        },
+        MutationColumn {
+            name: "name".to_owned(),
+            data_type: "text".to_owned(),
+            ..Default::default()
+        },
+        MutationColumn {
+            name: "version".to_owned(),
+            data_type: "int8".to_owned(),
+            insert_default_sql: Some("0".to_owned()),
+            ..Default::default()
+        },
+    ],
+    primary_key: vec!["id".to_owned()],
+    version_column: Some("version".to_owned()),
+    returning: None,
+    rows: vec![row],
+};
+
+let query = build_insert(&options).unwrap();
+```
+
+Identifiers are validated against `^[A-Za-z_][A-Za-z0-9_]*$` and quoted; user
+values are returned as bind parameters. Sub-select SQL and default SQL
+expressions are trusted input.
 
 ## JSON bridge
 
-`QueryOptions` implements serde `Serialize` and `Deserialize`. Its JSON shape is
-the same as the TypeScript `QueryOptions` type, so options serialized on the
-TypeScript side can be deserialized and reused directly:
+`QueryOptions` and `MutationOptions` implement serde `Serialize` and
+`Deserialize`. Their JSON shapes match the TypeScript types, so options
+serialized on the TypeScript side can be deserialized and reused directly:
 
 ```rust
 let options: datagrid_query_rs::QueryOptions = serde_json::from_str(&json)?;
 let query = datagrid_query_rs::build_query(&options)?;
 ```
 
-Optional fields may be omitted, filter operators use the TypeScript names, and
-JSON objects in filter values become `Value::Json`.
+Optional fields may be omitted, filter operators use the TypeScript names,
+mutation columns use `insertDefaultSql` and `updateDefaultSql`, and JSON objects
+in filter values become `Value::Json`.
+
+The implementation is split by operation in `src/query.rs`, `src/insert.rs`,
+`src/update.rs`, `src/upsert.rs`, and `src/delete.rs`, with shared types in
+`src/lib.rs`, shared SQL helpers in `src/shared.rs`, and mutation helpers in
+`src/mutation.rs`.
 
 See [../docs/query-builder.md](../docs/query-builder.md) for the shared query
-model, operator semantics, and JSON bridge details.
+model, operator semantics, JSON bridge, and mutation details.

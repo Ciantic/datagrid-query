@@ -1,12 +1,15 @@
 # Query builder design
 
-Both projects expose one public build function and return SQL plus bind
-parameters. Nothing connects to a database or executes a statement.
+Both projects expose build functions that return SQL plus bind parameters.
+Nothing connects to a database or executes a statement.
 
-| Project | Entry point |
-| --- | --- |
-| Rust | `datagrid_query_rs::build_query(&QueryOptions) -> Result<BuiltQuery, QueryError>` |
-| TypeScript | `buildQuery(options: QueryOptions): BuiltQuery` |
+| Operation | Rust | TypeScript |
+| --- | --- | --- |
+| Select | `build_query(&QueryOptions)` | `buildQuery(options)` |
+| Insert | `build_insert(&MutationOptions)` | `buildInsert(options)` |
+| Upsert | `build_upsert(&MutationOptions)` | `buildUpsert(options)` |
+| Update | `build_update(&MutationOptions)` | `buildUpdate(options)` |
+| Delete | `build_delete(&MutationOptions)` | `buildDelete(options)` |
 
 `BuiltQuery` contains `sql` and `params`. The generated statement has no
 trailing semicolon.
@@ -124,9 +127,9 @@ emits `LIMIT` and `OFFSET` only when a value is present.
 
 ## JSON transport from TypeScript to Rust
 
-Rust `QueryOptions` implements serde `Serialize` and `Deserialize` using the
-same JSON shape as the TypeScript `QueryOptions` type. A TypeScript caller can
-serialize its options directly:
+Rust `QueryOptions` and `MutationOptions` implement serde `Serialize` and
+`Deserialize` using the same JSON shape as their TypeScript counterparts. A
+TypeScript caller can serialize its options directly:
 
 ```ts
 import type { QueryOptions } from "datagrid-query-ts";
@@ -151,6 +154,11 @@ let options: QueryOptions = serde_json::from_str(&json)?;
 let query = build_query(&options)?;
 ```
 
+`MutationOptions` follows the same bridge, including `build_upsert`. The shared
+fixture `fixtures/upsert-options.json` is consumed by both test suites: the
+TypeScript suite parses and builds it, and the Rust suite deserializes it,
+re-serializes it, and builds the same upsert.
+
 The bridge uses these rules:
 
 - `table` / `schema` or `subquery` appear at the top level, exactly as in the
@@ -166,6 +174,73 @@ The bridge uses these rules:
   to TypeScript. `Value::Bytes` is the exception: `serde_json` writes it as a
   number array, and it reads back as `Value::Array`.
 
+## Mutations
+
+All mutation builders take one `MutationOptions` object:
+
+```ts
+interface MutationOptions {
+  table: string;
+  schema?: string;
+  columns: MutationColumn[];
+  primaryKey: string[];
+  versionColumn?: string;
+  returning?: string[];
+  rows: MutationRow[];
+}
+
+interface MutationColumn {
+  name: string;
+  type: string;
+  insertable?: boolean;
+  updatable?: boolean;
+  insertDefaultSql?: string;
+  updateDefaultSql?: string;
+}
+```
+
+`type` is the PostgreSQL type used in the `unnest` casts, such as `uuid`,
+`text`, `numeric`, `timestamptz`, or `int8`. `insertDefaultSql` and
+`updateDefaultSql` are trusted SQL expressions used when a row does not provide
+a value. `primaryKey` supports one or more columns. `returning` defaults to the
+primary key columns; an empty array disables `RETURNING`.
+
+Rows are partial objects. A missing value means "not provided":
+
+- For insert columns with `insertDefaultSql`, SQL uses a `#present` boolean
+  array and falls back to the expression when false.
+- For update columns, SQL uses a `#present` boolean array. Missing values keep
+  the existing column value, or use `updateDefaultSql` when configured.
+- Missing values without a default become `NULL` parameters. Explicit `null`
+  counts as provided.
+- Update and delete rows must contain non-null primary key values. If
+  `versionColumn` is set, they must also contain a non-null version.
+
+Each builder groups rows into typed arrays and emits one `unnest(...)` source:
+
+```text
+INSERT INTO "widgets" ("id", "name", "updated_at", "version")
+SELECT CASE WHEN v."id#present" THEN v."id" ELSE 9000 END,
+       v."name",
+       CASE WHEN v."updated_at#present" THEN v."updated_at" ELSE now() END,
+       CASE WHEN v."version#present" THEN v."version" ELSE 1 END
+FROM unnest($1::bigint[], $2::bool[], ...) AS v("id", "id#present", ...)
+RETURNING "widgets"."id"
+```
+
+Update and delete match rows by primary key. When `versionColumn` is set:
+
+- Update adds `AND u."version" = v."version"` and sets `"version" = u."version" + 1`.
+- Upsert adds `WHERE u."version" = excluded."version"` and increments the version.
+- Delete adds the same version match condition.
+
+Upsert uses `ON CONFLICT (primaryKey...)`. Non-key, updatable columns are
+assigned from `excluded`; `versionColumn` is incremented. If there is nothing to
+update, it emits `DO NOTHING`.
+
+The parameter order follows the generated `unnest` list. Every parameter is an
+array: value arrays use the column type, and presence flags use `bool[]`.
+
 ## Security model
 
 - Identifiers are validated and quoted, so table, column, and alias names cannot
@@ -173,6 +248,8 @@ The bridge uses these rules:
 - Values are never interpolated into the statement; they are returned in
   `params` for the caller to bind.
 - Raw sub-select SQL is trusted. Do not pass end-user text as sub-select SQL.
+- Mutation default expressions are trusted SQL. Do not pass end-user text as
+  `insertDefaultSql` or `updateDefaultSql`.
 - The caller still needs to apply authorization and row-level rules.
 
 ## Parity
@@ -181,7 +258,8 @@ Both implementations use the same SQL shape and the same operator semantics.
 Their test suites cover the same cases, including parameter offsets after a
 sub-select, nested filter groups, empty `IN` lists, and identifier validation.
 
-Both suites also execute generated SQL against PGlite. TypeScript uses the
-PGlite package directly. Rust starts the PGlite socket server from
-`datagrid-query-ts/scripts/pglite-server.mjs`, connects with the `postgres`
-crate, and runs the generated statements against real PostgreSQL semantics.
+Both suites also execute generated SQL against PGlite, including mutations.
+TypeScript uses the PGlite package directly. Rust starts the PGlite socket
+server from `datagrid-query-ts/scripts/pglite-server.mjs`, connects with the
+`postgres` crate, and runs the generated statements against real PostgreSQL
+semantics.
