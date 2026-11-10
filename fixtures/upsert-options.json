@@ -32,16 +32,8 @@
       "insertDefaultSql": "1"
     }
   ],
-  "primaryKey": ["id"],
-  "versionColumn": "version",
-  "rows": [
-    {
-      "id": 100,
-      "name": "alpha",
-      "version": 2
-    },
-    {
-      "name": "beta"
-    }
-  ]
+  "primaryKey": [
+    "id"
+  ],
+  "versionColumn": "version"
 }

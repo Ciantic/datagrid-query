@@ -21,18 +21,17 @@ export const widgetColumns: MutationColumn[] = [
   { name: "version", type: "bigint", insertDefaultSql: "1" },
 ];
 
-export function widgetOptions(rows: MutationRow[], table = "widgets"): MutationOptions {
+export function widgetOptions(table = "widgets"): MutationOptions {
   return {
     table,
     columns: widgetColumns,
     primaryKey: ["id"],
     versionColumn: "version",
-    rows,
   };
 }
 
-export function mergeWidgetOptions(rows: MutationRow[]): MutationOptions {
-  return widgetOptions(rows, "merge_widgets");
+export function mergeWidgetOptions(): MutationOptions {
+  return widgetOptions("merge_widgets");
 }
 
 const membershipColumns: MutationColumn[] = [
@@ -41,18 +40,22 @@ const membershipColumns: MutationColumn[] = [
   { name: "role", type: "text" },
 ];
 
-export function membershipOptions(rows: MutationRow[]): MutationOptions {
+export function membershipOptions(): MutationOptions {
   return {
     table: "memberships",
     columns: membershipColumns,
     primaryKey: ["tenant_id", "user_id"],
-    rows,
   };
 }
 
 export const upsertFixture = JSON.parse(
   readFileSync(new URL("../../fixtures/upsert-options.json", import.meta.url), "utf8"),
 ) as MutationOptions;
+
+export const upsertFixtureRows: MutationRow[] = [
+  { id: 100, name: "alpha", version: 2 },
+  { name: "beta" },
+];
 
 export async function createDatabase(): Promise<PGlite> {
   const db = new PGlite();

@@ -78,6 +78,19 @@ export interface MutationColumn {
 
 export type MutationRow = Record<string, unknown>;
 
+export type MutationParamKind = "value" | "present" | "required";
+
+export interface MutationParamSpec {
+  kind: MutationParamKind;
+  column: string;
+}
+
+export interface BuiltMutation {
+  sql: string;
+  columns: string[];
+  paramSpecs: MutationParamSpec[];
+}
+
 export interface MutationOptions {
   table: string;
   schema?: string;
@@ -85,5 +98,4 @@ export interface MutationOptions {
   primaryKey: readonly string[];
   versionColumn?: string;
   returning?: readonly string[];
-  rows: readonly MutationRow[];
 }

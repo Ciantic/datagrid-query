@@ -3,12 +3,12 @@ import {
   renderInsertSelect,
   renderMutationReturning,
 } from "./mutation.js";
-import type { BuiltQuery, MutationOptions } from "./types.js";
+import type { BuiltMutation, MutationOptions, MutationParamSpec } from "./types.js";
 
-export function buildInsert(options: MutationOptions): BuiltQuery {
+export function buildInsert(options: MutationOptions): BuiltMutation {
   const context = mutationContext(options);
-  const params: unknown[] = [];
-  const sql = `${renderInsertSelect(options, context, params, undefined)}${renderMutationReturning(context, context.tableName)}`;
+  const paramSpecs: MutationParamSpec[] = [];
+  const sql = `${renderInsertSelect(options, context, paramSpecs, undefined)}${renderMutationReturning(context, context.tableName)}`;
 
-  return { sql, params };
+  return { sql, columns: context.columnNames, paramSpecs };
 }

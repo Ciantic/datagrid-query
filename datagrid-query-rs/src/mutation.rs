@@ -1,11 +1,12 @@
 use crate::shared::{is_valid_sql_type, quote_identifier};
-use crate::{MutationColumn, MutationOptions, MutationRow, QueryError, Value};
+use crate::{MutationColumn, MutationOptions, MutationParamKind, MutationParamSpec, QueryError};
 use std::collections::BTreeMap;
 
 pub(crate) struct MutationContext {
     pub(crate) table: String,
     pub(crate) table_name: String,
     pub(crate) columns: BTreeMap<String, MutationColumn>,
+    pub(crate) column_names: Vec<String>,
     pub(crate) primary_key: Vec<String>,
     pub(crate) version_column: Option<String>,
     pub(crate) returning: Vec<String>,
@@ -103,62 +104,45 @@ pub(crate) fn mutation_context(options: &MutationOptions) -> Result<MutationCont
         }
     }
 
-    for row in &options.rows {
-        for key in row.keys() {
-            if !columns.contains_key(key) {
-                return Err(QueryError::UnknownColumn {
-                    column: key.clone(),
-                });
-            }
-        }
-    }
-
     Ok(MutationContext {
         table,
         table_name,
         columns,
+        column_names: options
+            .columns
+            .iter()
+            .map(|column| column.name.clone())
+            .collect(),
         primary_key: options.primary_key.clone(),
         version_column: options.version_column.clone(),
         returning,
     })
 }
 
-fn row_value(row: &MutationRow, column: &str) -> Value {
-    row.get(column).cloned().unwrap_or(Value::Null)
+pub(crate) fn mutation_column(
+    context: &MutationContext,
+    name: &str,
+) -> Result<MutationColumn, QueryError> {
+    context
+        .columns
+        .get(name)
+        .cloned()
+        .ok_or_else(|| QueryError::UnknownColumn {
+            column: name.to_owned(),
+        })
 }
 
-fn required_row_value(row: &MutationRow, column: &str) -> Result<Value, QueryError> {
-    match row.get(column) {
-        None | Some(Value::Null) => Err(QueryError::MissingRowValue {
-            column: column.to_owned(),
-        }),
-        Some(value) => Ok(value.clone()),
-    }
-}
-
-pub(crate) fn value_array(rows: &[MutationRow], column: &str) -> Value {
-    Value::Array(rows.iter().map(|row| row_value(row, column)).collect())
-}
-
-pub(crate) fn present_array(rows: &[MutationRow], column: &str) -> Value {
-    Value::Array(
-        rows.iter()
-            .map(|row| Value::Bool(row.contains_key(column)))
-            .collect(),
-    )
-}
-
-pub(crate) fn required_array(rows: &[MutationRow], column: &str) -> Result<Value, QueryError> {
-    let values = rows
-        .iter()
-        .map(|row| required_row_value(row, column))
-        .collect::<Result<Vec<_>, _>>()?;
-    Ok(Value::Array(values))
-}
-
-pub(crate) fn push_array_param(params: &mut Vec<Value>, value: Value, data_type: &str) -> String {
-    params.push(value);
-    format!("${}::{data_type}[]", params.len())
+pub(crate) fn push_param_spec(
+    specs: &mut Vec<MutationParamSpec>,
+    kind: MutationParamKind,
+    column: &str,
+    data_type: &str,
+) -> String {
+    specs.push(MutationParamSpec {
+        kind,
+        column: column.to_owned(),
+    });
+    format!("${}::{data_type}[]", specs.len())
 }
 
 pub(crate) fn render_mutation_returning(
@@ -183,7 +167,7 @@ pub(crate) fn render_mutation_returning(
 pub(crate) fn render_insert_select(
     options: &MutationOptions,
     context: &MutationContext,
-    params: &mut Vec<Value>,
+    param_specs: &mut Vec<MutationParamSpec>,
     alias: Option<&str>,
 ) -> Result<String, QueryError> {
     let columns = options
@@ -202,9 +186,10 @@ pub(crate) fn render_insert_select(
 
     for column in columns {
         let quoted = quote_identifier(&column.name, "column")?;
-        placeholders.push(push_array_param(
-            params,
-            value_array(&options.rows, &column.name),
+        placeholders.push(push_param_spec(
+            param_specs,
+            MutationParamKind::Value,
+            &column.name,
             &column.data_type,
         ));
         column_names.push(quoted.clone());
@@ -212,9 +197,10 @@ pub(crate) fn render_insert_select(
 
         if let Some(default_sql) = &column.insert_default_sql {
             let present_alias = format!("\"{}#present\"", column.name);
-            placeholders.push(push_array_param(
-                params,
-                present_array(&options.rows, &column.name),
+            placeholders.push(push_param_spec(
+                param_specs,
+                MutationParamKind::Present,
+                &column.name,
                 "bool",
             ));
             aliases.push(present_alias.clone());

@@ -1,17 +1,16 @@
 import {
   mutationContext,
-  presentArray,
-  pushTypedArray,
+  pushParamSpec,
   renderMutationReturning,
-  valueArray,
 } from "./mutation.js";
+import type { MutationContext } from "./mutation.js";
 import { QueryError, quoteIdentifier } from "./shared.js";
-import type { BuiltQuery, MutationOptions } from "./types.js";
+import type { BuiltMutation, MutationOptions, MutationParamSpec } from "./types.js";
 
 function renderMergeSource(
   options: MutationOptions,
-  context: ReturnType<typeof mutationContext>,
-  params: unknown[],
+  context: MutationContext,
+  paramSpecs: MutationParamSpec[],
 ): { placeholders: string[]; aliases: string[] } {
   const placeholders: string[] = [];
   const aliases: string[] = [];
@@ -27,11 +26,11 @@ function renderMergeSource(
     }
 
     const quoted = quoteIdentifier(column.name, "column");
-    placeholders.push(pushTypedArray(params, valueArray(options.rows, column.name), column.type));
+    placeholders.push(pushParamSpec(paramSpecs, "value", column.name, column.type));
     aliases.push(quoted);
 
     if (updatable || (insertable && column.insertDefaultSql !== undefined)) {
-      placeholders.push(pushTypedArray(params, presentArray(options.rows, column.name), "bool"));
+      placeholders.push(pushParamSpec(paramSpecs, "present", column.name, "bool"));
       aliases.push(`"${column.name}#present"`);
     }
   }
@@ -39,10 +38,10 @@ function renderMergeSource(
   return { placeholders, aliases };
 }
 
-export function buildMerge(options: MutationOptions): BuiltQuery {
+export function buildMerge(options: MutationOptions): BuiltMutation {
   const context = mutationContext(options);
-  const params: unknown[] = [];
-  const source = renderMergeSource(options, context, params);
+  const paramSpecs: MutationParamSpec[] = [];
+  const source = renderMergeSource(options, context, paramSpecs);
 
   const insertColumns = options.columns.filter((column) => column.insertable !== false);
   if (insertColumns.length === 0) {
@@ -102,5 +101,5 @@ export function buildMerge(options: MutationOptions): BuiltQuery {
 
   const sql = `MERGE INTO ${context.table} AS u USING unnest(${source.placeholders.join(", ")}) AS v(${source.aliases.join(", ")}) ON ${on} ${matchedSql} WHEN NOT MATCHED THEN INSERT (${insertNames.join(", ")}) VALUES (${insertValues.join(", ")})${renderMutationReturning(context, "u")}`;
 
-  return { sql, params };
+  return { sql, columns: context.columnNames, paramSpecs };
 }

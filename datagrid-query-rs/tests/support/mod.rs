@@ -1,8 +1,9 @@
 #![allow(dead_code)]
 
 use datagrid_query_rs::{
-    BuiltQuery, Filter, FilterCondition, FilterOperator, MutationColumn, MutationOptions,
-    MutationRow, QueryOptions, QuerySource, Sort, SortDirection, Value, build_query,
+    BuiltMutation, BuiltQuery, Filter, FilterCondition, FilterOperator, MutationColumn,
+    MutationOptions, MutationRow, QueryOptions, QuerySource, Sort, SortDirection, Value,
+    bind_mutation_rows, build_query,
 };
 use postgres::types::ToSql;
 use postgres::{Client, NoTls, Row};
@@ -125,12 +126,29 @@ pub(crate) fn execute(client: &mut Client, options: &QueryOptions) -> Vec<Row> {
 }
 
 pub(crate) fn run(client: &mut Client, query: &BuiltQuery) -> Vec<Row> {
-    let params = to_sql_params(&query.sql, &query.params);
+    run_sql(client, &query.sql, &query.params)
+}
+
+pub(crate) fn bind(mutation: &BuiltMutation, rows: &[MutationRow]) -> Vec<Value> {
+    bind_mutation_rows(mutation, rows).expect("mutation rows should bind")
+}
+
+pub(crate) fn run_mutation(
+    client: &mut Client,
+    mutation: &BuiltMutation,
+    rows: &[MutationRow],
+) -> Vec<Row> {
+    let params = bind(mutation, rows);
+    run_sql(client, &mutation.sql, &params)
+}
+
+fn run_sql(client: &mut Client, sql: &str, params: &[Value]) -> Vec<Row> {
+    let params = to_sql_params(sql, params);
     let refs: Vec<&(dyn ToSql + Sync)> = params.iter().map(|param| param.as_ref()).collect();
 
     client
-        .query(&query.sql, &refs)
-        .unwrap_or_else(|error| panic!("query failed: {error:?}\n{}", query.sql))
+        .query(sql, &refs)
+        .unwrap_or_else(|error| panic!("query failed: {error:?}\n{sql}"))
 }
 
 fn to_sql_params(sql: &str, values: &[Value]) -> Vec<Box<dyn ToSql + Sync>> {
@@ -341,7 +359,7 @@ pub(crate) fn widget_columns() -> Vec<MutationColumn> {
     ]
 }
 
-pub(crate) fn widget_options(rows: Vec<MutationRow>) -> MutationOptions {
+pub(crate) fn widget_options() -> MutationOptions {
     MutationOptions {
         table: "widgets".to_owned(),
         schema: None,
@@ -349,18 +367,17 @@ pub(crate) fn widget_options(rows: Vec<MutationRow>) -> MutationOptions {
         primary_key: vec!["id".to_owned()],
         version_column: Some("version".to_owned()),
         returning: None,
-        rows,
     }
 }
 
-pub(crate) fn merge_widget_options(rows: Vec<MutationRow>) -> MutationOptions {
+pub(crate) fn merge_widget_options() -> MutationOptions {
     MutationOptions {
         table: "merge_widgets".to_owned(),
-        ..widget_options(rows)
+        ..widget_options()
     }
 }
 
-pub(crate) fn membership_options(rows: Vec<MutationRow>) -> MutationOptions {
+pub(crate) fn membership_options() -> MutationOptions {
     MutationOptions {
         table: "memberships".to_owned(),
         schema: None,
@@ -372,7 +389,6 @@ pub(crate) fn membership_options(rows: Vec<MutationRow>) -> MutationOptions {
         primary_key: vec!["tenant_id".to_owned(), "user_id".to_owned()],
         version_column: None,
         returning: None,
-        rows,
     }
 }
 

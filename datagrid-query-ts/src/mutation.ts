@@ -1,10 +1,16 @@
-import { QueryError, pushParam, quoteIdentifier, validateSqlType } from "./shared.js";
-import type { MutationColumn, MutationOptions, MutationRow } from "./types.js";
+import { QueryError, quoteIdentifier, validateSqlType } from "./shared.js";
+import type {
+  MutationColumn,
+  MutationOptions,
+  MutationParamKind,
+  MutationParamSpec,
+} from "./types.js";
 
 export interface MutationContext {
   table: string;
   tableName: string;
   columns: Map<string, MutationColumn>;
+  columnNames: string[];
   primaryKey: string[];
   versionColumn: string | undefined;
   returning: string[];
@@ -79,18 +85,11 @@ export function mutationContext(options: MutationOptions): MutationContext {
     }
   }
 
-  for (const row of options.rows) {
-    for (const key of Object.keys(row)) {
-      if (!columns.has(key)) {
-        throw new QueryError(`Unknown row column: ${JSON.stringify(key)}`);
-      }
-    }
-  }
-
   return {
     table,
     tableName,
     columns,
+    columnNames: options.columns.map((column) => column.name),
     primaryKey: [...options.primaryKey],
     versionColumn: options.versionColumn,
     returning,
@@ -106,36 +105,14 @@ export function mutationColumn(context: MutationContext, name: string): Mutation
   return column;
 }
 
-function rowHasValue(row: MutationRow, column: string): boolean {
-  return Object.prototype.hasOwnProperty.call(row, column) && row[column] !== undefined;
-}
-
-function rowValue(row: MutationRow, column: string): unknown {
-  return rowHasValue(row, column) ? row[column] : null;
-}
-
-function requiredRowValue(row: MutationRow, column: string): unknown {
-  if (!rowHasValue(row, column) || row[column] === null) {
-    throw new QueryError(`Row is missing required value for column: ${JSON.stringify(column)}`);
-  }
-
-  return row[column];
-}
-
-export function valueArray(rows: readonly MutationRow[], column: string): unknown[] {
-  return rows.map((row) => rowValue(row, column));
-}
-
-export function presentArray(rows: readonly MutationRow[], column: string): boolean[] {
-  return rows.map((row) => rowHasValue(row, column));
-}
-
-export function requiredArray(rows: readonly MutationRow[], column: string): unknown[] {
-  return rows.map((row) => requiredRowValue(row, column));
-}
-
-export function pushTypedArray(params: unknown[], values: unknown[], type: string): string {
-  return `${pushParam(params, values)}::${type}[]`;
+export function pushParamSpec(
+  specs: MutationParamSpec[],
+  kind: MutationParamKind,
+  column: string,
+  type: string,
+): string {
+  specs.push({ kind, column });
+  return `$${specs.length}::${type}[]`;
 }
 
 export function renderMutationReturning(context: MutationContext, qualifier: string): string {
@@ -152,7 +129,7 @@ export function renderMutationReturning(context: MutationContext, qualifier: str
 export function renderInsertSelect(
   options: MutationOptions,
   context: MutationContext,
-  params: unknown[],
+  paramSpecs: MutationParamSpec[],
   alias: string | undefined,
 ): string {
   const columns = options.columns.filter((column) => column.insertable !== false);
@@ -167,13 +144,13 @@ export function renderInsertSelect(
 
   for (const column of columns) {
     const quoted = quoteIdentifier(column.name, "column");
-    placeholders.push(pushTypedArray(params, valueArray(options.rows, column.name), column.type));
+    placeholders.push(pushParamSpec(paramSpecs, "value", column.name, column.type));
     columnNames.push(quoted);
     aliases.push(quoted);
 
     if (column.insertDefaultSql !== undefined) {
       const presentAlias = `"${column.name}#present"`;
-      placeholders.push(pushTypedArray(params, presentArray(options.rows, column.name), "bool"));
+      placeholders.push(pushParamSpec(paramSpecs, "present", column.name, "bool"));
       aliases.push(presentAlias);
       selectExpressions.push(
         `CASE WHEN v.${presentAlias} THEN v.${quoted} ELSE ${column.insertDefaultSql} END`,

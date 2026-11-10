@@ -1,8 +1,8 @@
-use datagrid_query_rs::{MutationOptions, QueryError, Value, build_update};
+use datagrid_query_rs::{MutationOptions, QueryError, Value, bind_mutation_rows, build_update};
 mod support;
 use support::{
-    PgliteServer, create_mutation_tables, membership_options, mutation_column as column,
-    mutation_row as row, run, text, widget_options,
+    PgliteServer, bind, create_mutation_tables, membership_options, mutation_column as column,
+    mutation_row as row, run_mutation, text, widget_options,
 };
 
 fn array(values: Vec<Value>) -> Value {
@@ -11,20 +11,22 @@ fn array(values: Vec<Value>) -> Value {
 
 #[test]
 fn builds_batch_update_with_presence_flags_and_version_locking() {
-    let options = widget_options(vec![row(&[
-        ("id", Value::Int(1)),
-        ("version", Value::Int(1)),
-        ("name", text("b")),
-    ])]);
-
-    let query = build_update(&options).unwrap();
+    let mutation = build_update(&widget_options()).unwrap();
+    let params = bind(
+        &mutation,
+        &[row(&[
+            ("id", Value::Int(1)),
+            ("version", Value::Int(1)),
+            ("name", text("b")),
+        ])],
+    );
 
     assert_eq!(
-        query.sql,
+        mutation.sql,
         r#"UPDATE "widgets" AS u SET "name" = CASE WHEN v."name#present" THEN v."name" ELSE u."name" END, "note" = CASE WHEN v."note#present" THEN v."note" ELSE u."note" END, "updated_at" = CASE WHEN v."updated_at#present" THEN v."updated_at" ELSE now()::text END, "version" = u."version" + 1 FROM unnest($1::bigint[], $2::bigint[], $3::text[], $4::bool[], $5::text[], $6::bool[], $7::text[], $8::bool[]) AS v("id", "version", "name", "name#present", "note", "note#present", "updated_at", "updated_at#present") WHERE u."id" = v."id" AND u."version" = v."version" RETURNING u."id""#
     );
     assert_eq!(
-        query.params,
+        params,
         vec![
             array(vec![Value::Int(1)]),
             array(vec![Value::Int(1)]),
@@ -52,7 +54,8 @@ fn executes_update_against_pglite() {
         )
         .unwrap();
 
-    let update = build_update(&widget_options(vec![
+    let mutation = build_update(&widget_options()).unwrap();
+    let rows = vec![
         row(&[
             ("id", Value::Int(100)),
             ("version", Value::Int(1)),
@@ -65,9 +68,8 @@ fn executes_update_against_pglite() {
             ("version", Value::Int(1)),
             ("name", text("beta2")),
         ]),
-    ]))
-    .unwrap();
-    run(&mut client, &update);
+    ];
+    run_mutation(&mut client, &mutation, &rows);
 
     let updated = client
         .query(
@@ -93,13 +95,13 @@ fn executes_update_against_pglite() {
         ]
     );
 
-    let clear_note = build_update(&widget_options(vec![row(&[
+    let clear_note = build_update(&widget_options()).unwrap();
+    let clear_rows = vec![row(&[
         ("id", Value::Int(100)),
         ("version", Value::Int(2)),
         ("note", Value::Null),
-    ])]))
-    .unwrap();
-    run(&mut client, &clear_note);
+    ])];
+    run_mutation(&mut client, &clear_note, &clear_rows);
 
     let cleared = client
         .query(
@@ -111,13 +113,13 @@ fn executes_update_against_pglite() {
     assert_eq!(cleared[0].get::<_, Option<String>>("note"), None);
     assert_eq!(cleared[0].get::<_, i64>("version"), 3);
 
-    let stale = build_update(&widget_options(vec![row(&[
+    let stale = build_update(&widget_options()).unwrap();
+    let stale_rows = vec![row(&[
         ("id", Value::Int(9000)),
         ("version", Value::Int(1)),
         ("name", text("stale")),
-    ])]))
-    .unwrap();
-    run(&mut client, &stale);
+    ])];
+    run_mutation(&mut client, &stale, &stale_rows);
 
     let unchanged = client
         .query(
@@ -143,22 +145,23 @@ fn executes_composite_update_against_pglite() {
         )
         .unwrap();
 
-    let update = build_update(&membership_options(vec![row(&[
+    let mutation = build_update(&membership_options()).unwrap();
+    let rows = vec![row(&[
         ("tenant_id", Value::Int(1)),
         ("user_id", Value::Int(20)),
         ("role", text("manager")),
-    ])]))
-    .unwrap();
-    run(&mut client, &update);
+    ])];
+    run_mutation(&mut client, &mutation, &rows);
 
-    let rows = client
+    let updated = client
         .query(
             r#"SELECT "tenant_id", "user_id", "role" FROM "memberships" ORDER BY "tenant_id", "user_id""#,
             &[],
         )
         .unwrap();
     assert_eq!(
-        rows.iter()
+        updated
+            .iter()
             .map(|row| {
                 (
                     row.get::<_, i64>("tenant_id"),
@@ -173,9 +176,9 @@ fn executes_composite_update_against_pglite() {
 
 #[test]
 fn rejects_missing_update_version() {
-    let options = widget_options(vec![row(&[("id", Value::Int(1))])]);
+    let mutation = build_update(&widget_options()).unwrap();
     assert_eq!(
-        build_update(&options),
+        bind_mutation_rows(&mutation, &[row(&[("id", Value::Int(1))])]),
         Err(QueryError::MissingRowValue {
             column: "version".to_owned(),
         })
@@ -195,16 +198,11 @@ fn builds_composite_primary_key_update() {
         primary_key: vec!["tenant_id".to_owned(), "user_id".to_owned()],
         version_column: None,
         returning: None,
-        rows: vec![row(&[
-            ("tenant_id", Value::Int(1)),
-            ("user_id", Value::Int(10)),
-            ("role", text("admin")),
-        ])],
     };
+    let mutation = build_update(&options).unwrap();
 
-    let update = build_update(&options).unwrap();
     assert_eq!(
-        update.sql,
+        mutation.sql,
         r#"UPDATE "memberships" AS u SET "role" = CASE WHEN v."role#present" THEN v."role" ELSE u."role" END FROM unnest($1::bigint[], $2::bigint[], $3::text[], $4::bool[]) AS v("tenant_id", "user_id", "role", "role#present") WHERE u."tenant_id" = v."tenant_id" AND u."user_id" = v."user_id" RETURNING u."tenant_id", u."user_id""#
     );
 }

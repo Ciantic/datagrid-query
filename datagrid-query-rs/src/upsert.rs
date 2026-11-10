@@ -1,12 +1,12 @@
 use crate::mutation::{mutation_context, render_insert_select, render_mutation_returning};
 use crate::shared::quote_identifier;
-use crate::{BuiltQuery, MutationOptions, QueryError};
+use crate::{BuiltMutation, MutationOptions, MutationParamSpec, QueryError};
 
 /// Build a parameterised batch `INSERT ... ON CONFLICT` without executing it.
-pub fn build_upsert(options: &MutationOptions) -> Result<BuiltQuery, QueryError> {
+pub fn build_upsert(options: &MutationOptions) -> Result<BuiltMutation, QueryError> {
     let context = mutation_context(options)?;
-    let mut params = Vec::new();
-    let insert = render_insert_select(options, &context, &mut params, Some("u"))?;
+    let mut param_specs: Vec<MutationParamSpec> = Vec::new();
+    let insert = render_insert_select(options, &context, &mut param_specs, Some("u"))?;
     let conflict_target = context
         .primary_key
         .iter()
@@ -53,5 +53,9 @@ pub fn build_upsert(options: &MutationOptions) -> Result<BuiltQuery, QueryError>
         "{insert}{conflict_sql}{}",
         render_mutation_returning(&context, "u")?
     );
-    Ok(BuiltQuery { sql, params })
+    Ok(BuiltMutation {
+        sql,
+        columns: context.column_names,
+        param_specs,
+    })
 }

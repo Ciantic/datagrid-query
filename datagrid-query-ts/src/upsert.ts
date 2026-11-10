@@ -4,12 +4,12 @@ import {
   renderMutationReturning,
 } from "./mutation.js";
 import { quoteIdentifier } from "./shared.js";
-import type { BuiltQuery, MutationOptions } from "./types.js";
+import type { BuiltMutation, MutationOptions, MutationParamSpec } from "./types.js";
 
-export function buildUpsert(options: MutationOptions): BuiltQuery {
+export function buildUpsert(options: MutationOptions): BuiltMutation {
   const context = mutationContext(options);
-  const params: unknown[] = [];
-  const insert = renderInsertSelect(options, context, params, "u");
+  const paramSpecs: MutationParamSpec[] = [];
+  const insert = renderInsertSelect(options, context, paramSpecs, "u");
   const conflictTarget = context.primaryKey
     .map((name) => quoteIdentifier(name, "primary key column"))
     .join(", ");
@@ -51,5 +51,5 @@ export function buildUpsert(options: MutationOptions): BuiltQuery {
   }
 
   const sql = `${insert}${conflictSql}${renderMutationReturning(context, "u")}`;
-  return { sql, params };
+  return { sql, columns: context.columnNames, paramSpecs };
 }

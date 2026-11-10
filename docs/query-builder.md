@@ -1,7 +1,9 @@
 # Query builder design
 
-Both projects expose build functions that return SQL plus bind parameters.
-Nothing connects to a database or executes a statement.
+Both projects expose build functions that generate SQL without executing it.
+Select builders return SQL plus bind parameters. Mutation builders return SQL
+plus a parameter specification, and rows are bound separately. Nothing connects
+to a database or executes a statement.
 
 | Operation | Rust | TypeScript |
 | --- | --- | --- |
@@ -11,9 +13,10 @@ Nothing connects to a database or executes a statement.
 | Merge | `build_merge(&MutationOptions)` | `buildMerge(options)` |
 | Update | `build_update(&MutationOptions)` | `buildUpdate(options)` |
 | Delete | `build_delete(&MutationOptions)` | `buildDelete(options)` |
+| Bind rows | `bind_mutation_rows(&BuiltMutation, &rows)` | `bindMutationRows(mutation, rows)` |
 
-`BuiltQuery` contains `sql` and `params`. The generated statement has no
-trailing semicolon.
+`BuiltQuery` contains `sql` and `params`. `BuiltMutation` contains `sql`,
+`columns`, and `paramSpecs`. The generated statement has no trailing semicolon.
 
 ## Source
 
@@ -156,9 +159,16 @@ let query = build_query(&options)?;
 ```
 
 `MutationOptions` follows the same bridge, including `build_upsert` and
-`build_merge`. The shared fixture `fixtures/upsert-options.json` is consumed by
-both test suites: the TypeScript suite parses and builds it, and the Rust suite
-deserializes it, re-serializes it, and builds the same upsert and merge.
+`build_merge`. Mutation metadata contains no rows, so it can be serialized,
+cached, and reused independently from row data. The TypeScript side binds rows
+with `bindMutationRows`; Rust binds the same metadata and rows with
+`bind_mutation_rows`.
+
+`BuiltMutation` also serializes in Rust, so the SQL and parameter specification
+can be transported between languages before rows are bound. The shared fixture
+`fixtures/upsert-options.json` is consumed by both test suites: the TypeScript
+suite parses and builds it, and the Rust suite deserializes it, re-serializes
+it, and builds the same upsert and merge.
 
 The bridge uses these rules:
 
@@ -177,7 +187,7 @@ The bridge uses these rules:
 
 ## Mutations
 
-All mutation builders take one `MutationOptions` object:
+All mutation builders take one metadata-only `MutationOptions` object:
 
 ```ts
 interface MutationOptions {
@@ -187,7 +197,6 @@ interface MutationOptions {
   primaryKey: string[];
   versionColumn?: string;
   returning?: string[];
-  rows: MutationRow[];
 }
 
 interface MutationColumn {
@@ -206,6 +215,28 @@ interface MutationColumn {
 a value. `primaryKey` supports one or more columns. `returning` defaults to the
 primary key columns; an empty array disables `RETURNING`.
 
+The builder returns:
+
+```ts
+interface BuiltMutation {
+  sql: string;
+  columns: string[];
+  paramSpecs: MutationParamSpec[];
+}
+
+type MutationParamSpec =
+  | { kind: "value"; column: string }
+  | { kind: "present"; column: string }
+  | { kind: "required"; column: string };
+```
+
+Rows are supplied to the binder:
+
+```ts
+const mutation = buildUpdate(options);
+const params = bindMutationRows(mutation, rows);
+```
+
 Rows are partial objects. A missing value means "not provided":
 
 - For insert columns with `insertDefaultSql`, SQL uses a `#present` boolean
@@ -216,8 +247,10 @@ Rows are partial objects. A missing value means "not provided":
   counts as provided.
 - Update and delete rows must contain non-null primary key values. If
   `versionColumn` is set, they must also contain a non-null version.
+- Unknown row columns and missing required values are rejected by the binder.
 
-Each builder groups rows into typed arrays and emits one `unnest(...)` source:
+The builder emits one `unnest(...)` source, and the binder produces the matching
+typed arrays in the same order:
 
 ```text
 INSERT INTO "widgets" ("id", "name", "updated_at", "version")

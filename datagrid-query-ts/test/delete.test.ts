@@ -1,11 +1,7 @@
 import type { PGlite } from "@electric-sql/pglite";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { buildDelete } from "../src/index.js";
-import {
-  createDatabase,
-  membershipOptions,
-  widgetOptions,
-} from "./support.js";
+import { bindMutationRows, buildDelete } from "../src/index.js";
+import { createDatabase, membershipOptions, widgetOptions } from "./support.js";
 
 let db: PGlite;
 
@@ -19,12 +15,13 @@ afterAll(async () => {
 
 describe("buildDelete", () => {
   it("builds a batch delete with version locking", () => {
-    const query = buildDelete(widgetOptions([{ id: 1, version: 1 }]));
+    const query = buildDelete(widgetOptions());
+    const params = bindMutationRows(query, [{ id: 1, version: 1 }]);
 
     expect(query.sql).toBe(
       'DELETE FROM "widgets" AS u USING unnest($1::bigint[], $2::bigint[]) AS v("id", "version") WHERE u."id" = v."id" AND u."version" = v."version" RETURNING u."id"',
     );
-    expect(query.params).toEqual([[1], [1]]);
+    expect(params).toEqual([[1], [1]]);
   });
 
   it("deletes only rows matching the primary key and version", async () => {
@@ -35,14 +32,14 @@ describe("buildDelete", () => {
         (200, 'beta', NULL, 'c2', 'u2', 1);
     `);
 
-    const stale = buildDelete(widgetOptions([{ id: 100, version: 1 }]));
-    await db.query(stale.sql, stale.params);
+    const stale = buildDelete(widgetOptions());
+    await db.query(stale.sql, bindMutationRows(stale, [{ id: 100, version: 1 }]));
 
     const afterStale = await db.query<{ id: number }>('SELECT "id" FROM "widgets" ORDER BY "id"');
     expect(afterStale.rows).toEqual([{ id: 100 }, { id: 200 }]);
 
-    const remove = buildDelete(widgetOptions([{ id: 200, version: 1 }]));
-    await db.query(remove.sql, remove.params);
+    const remove = buildDelete(widgetOptions());
+    await db.query(remove.sql, bindMutationRows(remove, [{ id: 200, version: 1 }]));
 
     const remaining = await db.query<{ id: number }>('SELECT "id" FROM "widgets" ORDER BY "id"');
     expect(remaining.rows).toEqual([{ id: 100 }]);
@@ -56,12 +53,16 @@ describe("buildDelete", () => {
         (1, 20, 'user');
     `);
 
-    const remove = buildDelete(membershipOptions([{ tenant_id: 1, user_id: 10 }]));
-    await db.query(remove.sql, remove.params);
+    const remove = buildDelete(membershipOptions());
+    await db.query(remove.sql, bindMutationRows(remove, [{ tenant_id: 1, user_id: 10 }]));
 
-    const rows = await db.query<{ tenant_id: number; user_id: number; role: string }>(
+    const remaining = await db.query<{
+      tenant_id: number;
+      user_id: number;
+      role: string;
+    }>(
       'SELECT "tenant_id", "user_id", "role" FROM "memberships" ORDER BY "tenant_id", "user_id"',
     );
-    expect(rows.rows).toEqual([{ tenant_id: 1, user_id: 20, role: "user" }]);
+    expect(remaining.rows).toEqual([{ tenant_id: 1, user_id: 20, role: "user" }]);
   });
 });

@@ -54,6 +54,7 @@ const query = buildQuery({
 
 ```ts
 import {
+  bindMutationRows,
   buildInsert,
   buildUpdate,
   buildUpsert,
@@ -71,31 +72,36 @@ const options = {
   ],
   primaryKey: ["id"],
   versionColumn: "version",
-  rows: [{ name: "Ada" }],
 };
 
 const insert = buildInsert(options);
+const rows = [{ name: "Ada" }];
+const params = bindMutationRows(insert, rows);
+
 const update = buildUpdate(options);
 const upsert = buildUpsert(options);
 const merge = buildMerge(options);
 const remove = buildDelete(options);
 ```
 
-Mutation rows are partial. `insertDefaultSql` and `updateDefaultSql` control
-fallbacks for missing values, and `#present` boolean arrays carry presence
-through `unnest`. `buildMerge` uses PostgreSQL `MERGE` and applies patch
-semantics on matched rows: omitted fields keep their existing values, while
-explicit `null` writes `NULL`.
+Mutation builders return SQL and a parameter specification without row data.
+`bindMutationRows` turns partial rows into the parameter arrays used by
+`unnest`. `insertDefaultSql` and `updateDefaultSql` control fallbacks for
+missing values, and `#present` boolean arrays carry presence. `buildMerge` uses
+PostgreSQL `MERGE` and applies patch semantics on matched rows: omitted fields
+keep their existing values, while explicit `null` writes `NULL`.
 
-`buildQuery`, `buildInsert`, `buildUpdate`, `buildUpsert`, `buildMerge`, and
-`buildDelete` are the runtime exports; all other exports are types. Invalid input throws an error
-named `QueryError`. Identifiers are validated against
-`^[A-Za-z_][A-Za-z0-9_]*$` and quoted; user values are returned as bind
-parameters. Sub-select SQL and default SQL expressions are trusted input.
+`buildQuery`, `buildInsert`, `buildUpdate`, `buildUpsert`, `buildMerge`,
+`buildDelete`, and `bindMutationRows` are the runtime exports; all other
+exports are types. Invalid input throws an error named `QueryError`.
+Identifiers are validated against `^[A-Za-z_][A-Za-z0-9_]*$` and quoted; user
+values are returned as bind parameters. Sub-select SQL and default SQL
+expressions are trusted input.
 
 The options accepted by the builders use the same JSON shape as the Rust serde
 representations, so `JSON.stringify(options)` can be sent to the Rust
-implementation and deserialized there.
+implementation and deserialized there. Mutation options contain no rows, so
+metadata and row data can be transported independently.
 
 The implementation is split by operation in `src/query.ts`, `src/insert.ts`,
 `src/update.ts`, `src/upsert.ts`, `src/merge.ts`, and `src/delete.ts`, with

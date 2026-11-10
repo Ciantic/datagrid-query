@@ -1,13 +1,11 @@
-use crate::mutation::{
-    mutation_context, present_array, push_array_param, render_mutation_returning, value_array,
-};
+use crate::mutation::{mutation_context, push_param_spec, render_mutation_returning};
 use crate::shared::quote_identifier;
-use crate::{BuiltQuery, MutationOptions, QueryError};
+use crate::{BuiltMutation, MutationOptions, MutationParamKind, MutationParamSpec, QueryError};
 
 /// Build a parameterised `MERGE` with per-field patch semantics.
-pub fn build_merge(options: &MutationOptions) -> Result<BuiltQuery, QueryError> {
+pub fn build_merge(options: &MutationOptions) -> Result<BuiltMutation, QueryError> {
     let context = mutation_context(options)?;
-    let mut params = Vec::new();
+    let mut param_specs: Vec<MutationParamSpec> = Vec::new();
     let mut placeholders = Vec::new();
     let mut aliases = Vec::new();
 
@@ -22,17 +20,19 @@ pub fn build_merge(options: &MutationOptions) -> Result<BuiltQuery, QueryError> 
         }
 
         let quoted = quote_identifier(&column.name, "column")?;
-        placeholders.push(push_array_param(
-            &mut params,
-            value_array(&options.rows, &column.name),
+        placeholders.push(push_param_spec(
+            &mut param_specs,
+            MutationParamKind::Value,
+            &column.name,
             &column.data_type,
         ));
         aliases.push(quoted);
 
         if updatable || (insertable && column.insert_default_sql.is_some()) {
-            placeholders.push(push_array_param(
-                &mut params,
-                present_array(&options.rows, &column.name),
+            placeholders.push(push_param_spec(
+                &mut param_specs,
+                MutationParamKind::Present,
+                &column.name,
                 "bool",
             ));
             aliases.push(format!("\"{}#present\"", column.name));
@@ -120,5 +120,9 @@ pub fn build_merge(options: &MutationOptions) -> Result<BuiltQuery, QueryError> 
         render_mutation_returning(&context, "u")?
     );
 
-    Ok(BuiltQuery { sql, params })
+    Ok(BuiltMutation {
+        sql,
+        columns: context.column_names,
+        param_specs,
+    })
 }

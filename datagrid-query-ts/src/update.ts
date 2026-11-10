@@ -1,25 +1,22 @@
 import {
   mutationColumn,
   mutationContext,
-  presentArray,
-  pushTypedArray,
+  pushParamSpec,
   renderMutationReturning,
-  requiredArray,
-  valueArray,
 } from "./mutation.js";
 import { QueryError, quoteIdentifier } from "./shared.js";
-import type { BuiltQuery, MutationOptions } from "./types.js";
+import type { BuiltMutation, MutationOptions, MutationParamSpec } from "./types.js";
 
-export function buildUpdate(options: MutationOptions): BuiltQuery {
+export function buildUpdate(options: MutationOptions): BuiltMutation {
   const context = mutationContext(options);
-  const params: unknown[] = [];
+  const paramSpecs: MutationParamSpec[] = [];
   const aliases: string[] = [];
   const placeholders: string[] = [];
 
   for (const key of context.primaryKey) {
     const column = mutationColumn(context, key);
     const quoted = quoteIdentifier(key, "primary key column");
-    placeholders.push(pushTypedArray(params, requiredArray(options.rows, key), column.type));
+    placeholders.push(pushParamSpec(paramSpecs, "required", key, column.type));
     aliases.push(quoted);
   }
 
@@ -27,7 +24,7 @@ export function buildUpdate(options: MutationOptions): BuiltQuery {
     const column = mutationColumn(context, context.versionColumn);
     const quoted = quoteIdentifier(context.versionColumn, "version column");
     placeholders.push(
-      pushTypedArray(params, requiredArray(options.rows, context.versionColumn), column.type),
+      pushParamSpec(paramSpecs, "required", context.versionColumn, column.type),
     );
     aliases.push(quoted);
   }
@@ -47,11 +44,11 @@ export function buildUpdate(options: MutationOptions): BuiltQuery {
     }
 
     const quoted = quoteIdentifier(column.name, "column");
-    placeholders.push(pushTypedArray(params, valueArray(options.rows, column.name), column.type));
+    placeholders.push(pushParamSpec(paramSpecs, "value", column.name, column.type));
     aliases.push(quoted);
 
     const presentAlias = `"${column.name}#present"`;
-    placeholders.push(pushTypedArray(params, presentArray(options.rows, column.name), "bool"));
+    placeholders.push(pushParamSpec(paramSpecs, "present", column.name, "bool"));
     aliases.push(presentAlias);
 
     const fallback = column.updateDefaultSql ?? `u.${quoted}`;
@@ -81,5 +78,5 @@ export function buildUpdate(options: MutationOptions): BuiltQuery {
   }
 
   const sql = `UPDATE ${context.table} AS u SET ${setAssignments.join(", ")} FROM unnest(${placeholders.join(", ")}) AS v(${aliases.join(", ")}) WHERE ${where.join(" AND ")}${renderMutationReturning(context, "u")}`;
-  return { sql, params };
+  return { sql, columns: context.columnNames, paramSpecs };
 }

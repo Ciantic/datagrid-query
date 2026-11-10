@@ -1,16 +1,15 @@
 import {
   mutationColumn,
   mutationContext,
-  pushTypedArray,
+  pushParamSpec,
   renderMutationReturning,
-  requiredArray,
 } from "./mutation.js";
 import { quoteIdentifier } from "./shared.js";
-import type { BuiltQuery, MutationOptions } from "./types.js";
+import type { BuiltMutation, MutationOptions, MutationParamSpec } from "./types.js";
 
-export function buildDelete(options: MutationOptions): BuiltQuery {
+export function buildDelete(options: MutationOptions): BuiltMutation {
   const context = mutationContext(options);
-  const params: unknown[] = [];
+  const paramSpecs: MutationParamSpec[] = [];
   const aliases: string[] = [];
   const placeholders: string[] = [];
   const where: string[] = [];
@@ -18,7 +17,7 @@ export function buildDelete(options: MutationOptions): BuiltQuery {
   for (const key of context.primaryKey) {
     const column = mutationColumn(context, key);
     const quoted = quoteIdentifier(key, "primary key column");
-    placeholders.push(pushTypedArray(params, requiredArray(options.rows, key), column.type));
+    placeholders.push(pushParamSpec(paramSpecs, "required", key, column.type));
     aliases.push(quoted);
     where.push(`u.${quoted} = v.${quoted}`);
   }
@@ -27,12 +26,12 @@ export function buildDelete(options: MutationOptions): BuiltQuery {
     const column = mutationColumn(context, context.versionColumn);
     const quoted = quoteIdentifier(context.versionColumn, "version column");
     placeholders.push(
-      pushTypedArray(params, requiredArray(options.rows, context.versionColumn), column.type),
+      pushParamSpec(paramSpecs, "required", context.versionColumn, column.type),
     );
     aliases.push(quoted);
     where.push(`u.${quoted} = v.${quoted}`);
   }
 
   const sql = `DELETE FROM ${context.table} AS u USING unnest(${placeholders.join(", ")}) AS v(${aliases.join(", ")}) WHERE ${where.join(" AND ")}${renderMutationReturning(context, "u")}`;
-  return { sql, params };
+  return { sql, columns: context.columnNames, paramSpecs };
 }

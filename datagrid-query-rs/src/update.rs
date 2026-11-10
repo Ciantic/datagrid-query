@@ -1,44 +1,35 @@
 use crate::mutation::{
-    mutation_context, present_array, push_array_param, render_mutation_returning, required_array,
-    value_array,
+    mutation_column, mutation_context, push_param_spec, render_mutation_returning,
 };
 use crate::shared::quote_identifier;
-use crate::{BuiltQuery, MutationOptions, QueryError};
+use crate::{BuiltMutation, MutationOptions, MutationParamKind, MutationParamSpec, QueryError};
 
 /// Build a parameterised batch `UPDATE` without executing it.
-pub fn build_update(options: &MutationOptions) -> Result<BuiltQuery, QueryError> {
+pub fn build_update(options: &MutationOptions) -> Result<BuiltMutation, QueryError> {
     let context = mutation_context(options)?;
-    let mut params = Vec::new();
+    let mut param_specs: Vec<MutationParamSpec> = Vec::new();
     let mut aliases = Vec::new();
     let mut placeholders = Vec::new();
 
     for key in &context.primary_key {
-        let column = context
-            .columns
-            .get(key)
-            .ok_or_else(|| QueryError::UnknownColumn {
-                column: key.clone(),
-            })?;
+        let column = mutation_column(&context, key)?;
         let quoted = quote_identifier(key, "primary key column")?;
-        placeholders.push(push_array_param(
-            &mut params,
-            required_array(&options.rows, key)?,
+        placeholders.push(push_param_spec(
+            &mut param_specs,
+            MutationParamKind::Required,
+            key,
             &column.data_type,
         ));
         aliases.push(quoted);
     }
 
     if let Some(version) = &context.version_column {
-        let column = context
-            .columns
-            .get(version)
-            .ok_or_else(|| QueryError::UnknownColumn {
-                column: version.clone(),
-            })?;
+        let column = mutation_column(&context, version)?;
         let quoted = quote_identifier(version, "version column")?;
-        placeholders.push(push_array_param(
-            &mut params,
-            required_array(&options.rows, version)?,
+        placeholders.push(push_param_spec(
+            &mut param_specs,
+            MutationParamKind::Required,
+            version,
             &column.data_type,
         ));
         aliases.push(quoted);
@@ -54,17 +45,19 @@ pub fn build_update(options: &MutationOptions) -> Result<BuiltQuery, QueryError>
         }
 
         let quoted = quote_identifier(&column.name, "column")?;
-        placeholders.push(push_array_param(
-            &mut params,
-            value_array(&options.rows, &column.name),
+        placeholders.push(push_param_spec(
+            &mut param_specs,
+            MutationParamKind::Value,
+            &column.name,
             &column.data_type,
         ));
         aliases.push(quoted.clone());
 
         let present_alias = format!("\"{}#present\"", column.name);
-        placeholders.push(push_array_param(
-            &mut params,
-            present_array(&options.rows, &column.name),
+        placeholders.push(push_param_spec(
+            &mut param_specs,
+            MutationParamKind::Present,
+            &column.name,
             "bool",
         ));
         aliases.push(present_alias.clone());
@@ -107,5 +100,9 @@ pub fn build_update(options: &MutationOptions) -> Result<BuiltQuery, QueryError>
         where_parts.join(" AND "),
         render_mutation_returning(&context, "u")?
     );
-    Ok(BuiltQuery { sql, params })
+    Ok(BuiltMutation {
+        sql,
+        columns: context.column_names,
+        param_specs,
+    })
 }

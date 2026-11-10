@@ -3,6 +3,7 @@ use serde_json::Value as JsonValue;
 use std::collections::BTreeMap;
 use std::fmt;
 
+mod bind;
 mod delete;
 mod insert;
 mod merge;
@@ -12,6 +13,7 @@ mod shared;
 mod update;
 mod upsert;
 
+pub use bind::bind_mutation_rows;
 pub use delete::build_delete;
 pub use insert::build_insert;
 pub use merge::build_merge;
@@ -43,6 +45,29 @@ pub struct MutationColumn {
 
 pub type MutationRow = BTreeMap<String, Value>;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum MutationParamKind {
+    Value,
+    Present,
+    Required,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MutationParamSpec {
+    pub kind: MutationParamKind,
+    pub column: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BuiltMutation {
+    pub sql: String,
+    pub columns: Vec<String>,
+    pub param_specs: Vec<MutationParamSpec>,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MutationOptions {
@@ -55,7 +80,6 @@ pub struct MutationOptions {
     pub version_column: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub returning: Option<Vec<String>>,
-    pub rows: Vec<MutationRow>,
 }
 
 impl Default for MutationColumn {
