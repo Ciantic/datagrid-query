@@ -5,6 +5,10 @@ use support::{
     mutation_row as row, run, text, widget_options,
 };
 
+fn array(values: Vec<Value>) -> Value {
+    Value::Array(values)
+}
+
 #[test]
 fn builds_merge_with_per_field_patch_semantics() {
     let options = widget_options(vec![row(&[
@@ -15,29 +19,27 @@ fn builds_merge_with_per_field_patch_semantics() {
 
     let query = build_merge(&options).unwrap();
 
-    assert!(
-        query
-            .sql
-            .starts_with(r#"MERGE INTO "widgets" AS u USING unnest("#)
+    assert_eq!(
+        query.sql,
+        r#"MERGE INTO "widgets" AS u USING unnest($1::bigint[], $2::bool[], $3::text[], $4::bool[], $5::text[], $6::bool[], $7::text[], $8::bool[], $9::text[], $10::bool[], $11::bigint[], $12::bool[]) AS v("id", "id#present", "name", "name#present", "note", "note#present", "created_at", "created_at#present", "updated_at", "updated_at#present", "version", "version#present") ON u."id" = v."id" WHEN MATCHED AND u."version" = v."version" THEN UPDATE SET "name" = CASE WHEN v."name#present" THEN v."name" ELSE u."name" END, "note" = CASE WHEN v."note#present" THEN v."note" ELSE u."note" END, "updated_at" = CASE WHEN v."updated_at#present" THEN v."updated_at" ELSE now()::text END, "version" = u."version" + 1 WHEN NOT MATCHED THEN INSERT ("id", "name", "note", "created_at", "updated_at", "version") VALUES (CASE WHEN v."id#present" THEN v."id" ELSE 9000 END, v."name", v."note", CASE WHEN v."created_at#present" THEN v."created_at" ELSE now()::text END, CASE WHEN v."updated_at#present" THEN v."updated_at" ELSE now()::text END, CASE WHEN v."version#present" THEN v."version" ELSE 1 END) RETURNING u."id""#
     );
-    assert!(query.sql.contains(r#"ON u."id" = v."id""#));
-    assert!(
-        query
-            .sql
-            .contains(r#"WHEN MATCHED AND u."version" = v."version" THEN UPDATE SET"#)
+    assert_eq!(
+        query.params,
+        vec![
+            array(vec![Value::Int(100)]),
+            array(vec![Value::Bool(true)]),
+            array(vec![text("patched")]),
+            array(vec![Value::Bool(true)]),
+            array(vec![Value::Null]),
+            array(vec![Value::Bool(false)]),
+            array(vec![Value::Null]),
+            array(vec![Value::Bool(false)]),
+            array(vec![Value::Null]),
+            array(vec![Value::Bool(false)]),
+            array(vec![Value::Int(3)]),
+            array(vec![Value::Bool(true)]),
+        ]
     );
-    assert!(
-        query
-            .sql
-            .contains(r#""name" = CASE WHEN v."name#present" THEN v."name" ELSE u."name" END"#)
-    );
-    assert!(query.sql.contains(
-        r#""updated_at" = CASE WHEN v."updated_at#present" THEN v."updated_at" ELSE now()::text END"#
-    ));
-    assert!(query.sql.contains(r#""version" = u."version" + 1"#));
-    assert!(query.sql.contains("WHEN NOT MATCHED THEN INSERT"));
-    assert!(query.sql.contains(r#"RETURNING u."id""#));
-    assert_eq!(query.params.len(), 12);
 }
 
 #[test]
