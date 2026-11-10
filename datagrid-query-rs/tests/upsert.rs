@@ -1,22 +1,19 @@
-use datagrid_query::{MutationOptions, Value, build_upsert};
-mod support;
-use support::{bind, mutation_column as column, mutation_row as row, text, widget_options};
-
-fn array(values: Vec<Value>) -> Value {
-    Value::Array(values)
-}
+use datagrid_query::{MutationOptions, Value, bind_mutation_rows, build_upsert};
+mod helpers;
+use helpers::{membership_options, mutation_row as row, widget_options};
 
 #[test]
 fn builds_upsert_with_conflict_update_and_version_locking() {
     let mutation = build_upsert(&widget_options()).unwrap();
-    let params = bind(
+    let params = bind_mutation_rows(
         &mutation,
         &[row(&[
             ("id", Value::Int(1)),
-            ("name", text("a")),
+            ("name", Value::Text("a".to_owned())),
             ("version", Value::Int(1)),
         ])],
-    );
+    )
+    .unwrap();
 
     assert_eq!(
         mutation.sql,
@@ -25,16 +22,16 @@ fn builds_upsert_with_conflict_update_and_version_locking() {
     assert_eq!(
         params,
         vec![
-            array(vec![Value::Int(1)]),
-            array(vec![Value::Bool(true)]),
-            array(vec![text("a")]),
-            array(vec![Value::Null]),
-            array(vec![Value::Null]),
-            array(vec![Value::Bool(false)]),
-            array(vec![Value::Null]),
-            array(vec![Value::Bool(false)]),
-            array(vec![Value::Int(1)]),
-            array(vec![Value::Bool(true)]),
+            Value::Array(vec![Value::Int(1)]),
+            Value::Array(vec![Value::Bool(true)]),
+            Value::Array(vec![Value::Text("a".to_owned())]),
+            Value::Array(vec![Value::Null]),
+            Value::Array(vec![Value::Null]),
+            Value::Array(vec![Value::Bool(false)]),
+            Value::Array(vec![Value::Null]),
+            Value::Array(vec![Value::Bool(false)]),
+            Value::Array(vec![Value::Int(1)]),
+            Value::Array(vec![Value::Bool(true)]),
         ]
     );
 }
@@ -51,12 +48,12 @@ fn accepts_typescript_upsert_json() {
     let rows = vec![
         row(&[
             ("id", Value::Int(100)),
-            ("name", text("alpha")),
+            ("name", Value::Text("alpha".to_owned())),
             ("version", Value::Int(2)),
         ]),
-        row(&[("name", text("beta"))]),
+        row(&[("name", Value::Text("beta".to_owned()))]),
     ];
-    let params = bind(&mutation, &rows);
+    let params = bind_mutation_rows(&mutation, &rows).unwrap();
 
     assert!(mutation.sql.starts_with(r#"INSERT INTO "widgets" AS u"#));
     assert!(mutation.sql.contains(r#"ON CONFLICT ("id") DO UPDATE SET"#));
@@ -71,18 +68,7 @@ fn accepts_typescript_upsert_json() {
 
 #[test]
 fn builds_composite_primary_key_upsert() {
-    let options = MutationOptions {
-        table: "memberships".to_owned(),
-        schema: None,
-        columns: vec![
-            column("tenant_id", "bigint"),
-            column("user_id", "bigint"),
-            column("role", "text"),
-        ],
-        primary_key: vec!["tenant_id".to_owned(), "user_id".to_owned()],
-        version_column: None,
-        returning: None,
-    };
+    let options = membership_options();
     let mutation = build_upsert(&options).unwrap();
 
     assert!(

@@ -5,11 +5,11 @@ Rust query builder for data grids. It builds parameterised `SELECT`, `INSERT`,
 
 ## Development
 
-The integration tests start PGlite in socket-server mode with a script embedded
-in the test support module. Bun runs that script and caches the pinned PGlite
-packages in its global module cache, so no JavaScript install step is needed.
-The first run downloads them, which requires network access. Install
-[Bun](https://bun.sh) first; the tests are verified with Bun 1.4.
+The integration tests start PGlite in socket-server mode from
+`tests/helpers/pglite_server.rs`. Bun runs the embedded script and caches the
+pinned PGlite packages in its global module cache, so no JavaScript install
+step is needed. The first run downloads them, which requires network access.
+Install [Bun](https://bun.sh) first; the tests are verified with Bun 1.4.
 
 ```bash
 cargo test

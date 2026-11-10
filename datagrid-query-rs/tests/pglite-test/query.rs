@@ -1,10 +1,11 @@
 use datagrid_query::{
     Combinator, Filter, FilterCondition, FilterGroup, FilterOperator, QueryOptions, QuerySource,
-    SelectColumn, Sort, SortDirection, SubquerySource, Value,
+    SelectColumn, Sort, SortDirection, SubquerySource, Value, build_query,
 };
 
-mod support;
-use support::{PgliteServer, execute, id_names, ids};
+#[path = "../helpers/mod.rs"]
+mod helpers;
+use helpers::{PgliteServer, id_names, ids, run_sql};
 
 fn blank(source: QuerySource) -> QueryOptions {
     QueryOptions {
@@ -76,8 +77,9 @@ fn executes_generated_queries_against_pglite() {
     options.limit = Some(2);
     options.offset = Some(1);
 
+    let query = build_query(&options).expect("query should build");
     assert_eq!(
-        id_names(&execute(&mut client, &options)),
+        id_names(&run_sql(&mut client, &query.sql, &query.params)),
         vec![(3, "Cara".to_owned()), (4, "Dan".to_owned())]
     );
 
@@ -96,7 +98,11 @@ fn executes_generated_queries_against_pglite() {
     })];
     options.sort = vec![sort("id", SortDirection::Asc)];
 
-    assert_eq!(ids(&execute(&mut client, &options)), vec![1, 3]);
+    let query = build_query(&options).expect("query should build");
+    assert_eq!(
+        ids(&run_sql(&mut client, &query.sql, &query.params)),
+        vec![1, 3]
+    );
 
     let mut options = blank(table("people"));
     options.columns = vec![SelectColumn::Name("id".to_owned())];
@@ -107,7 +113,11 @@ fn executes_generated_queries_against_pglite() {
     )];
     options.sort = vec![sort("score", SortDirection::Desc)];
 
-    assert_eq!(ids(&execute(&mut client, &options)), vec![1, 3, 2]);
+    let query = build_query(&options).expect("query should build");
+    assert_eq!(
+        ids(&run_sql(&mut client, &query.sql, &query.params)),
+        vec![1, 3, 2]
+    );
 
     let mut options = blank(table("people"));
     options.columns = vec![SelectColumn::Name("id".to_owned())];
@@ -118,7 +128,11 @@ fn executes_generated_queries_against_pglite() {
     )];
     options.sort = vec![sort("id", SortDirection::Asc)];
 
-    assert_eq!(ids(&execute(&mut client, &options)), vec![1, 3]);
+    let query = build_query(&options).expect("query should build");
+    assert_eq!(
+        ids(&run_sql(&mut client, &query.sql, &query.params)),
+        vec![1, 3]
+    );
 
     let mut options = blank(table("people"));
     options.columns = vec![SelectColumn::Name("id".to_owned())];
@@ -128,14 +142,19 @@ fn executes_generated_queries_against_pglite() {
         Some(Value::Array(Vec::new())),
     )];
 
-    assert!(execute(&mut client, &options).is_empty());
+    let query = build_query(&options).expect("query should build");
+    assert!(run_sql(&mut client, &query.sql, &query.params).is_empty());
 
     let mut options = blank(table("people"));
     options.columns = vec![SelectColumn::Name("id".to_owned())];
     options.filters = vec![condition("deleted_at", FilterOperator::Eq, None)];
     options.sort = vec![sort("id", SortDirection::Asc)];
 
-    assert_eq!(ids(&execute(&mut client, &options)), vec![1, 2, 4]);
+    let query = build_query(&options).expect("query should build");
+    assert_eq!(
+        ids(&run_sql(&mut client, &query.sql, &query.params)),
+        vec![1, 2, 4]
+    );
 
     let mut options = blank(QuerySource::Subquery {
         subquery: SubquerySource {
@@ -155,8 +174,9 @@ fn executes_generated_queries_against_pglite() {
     )];
     options.sort = vec![sort("id", SortDirection::Asc)];
 
+    let query = build_query(&options).expect("query should build");
     assert_eq!(
-        id_names(&execute(&mut client, &options)),
+        id_names(&run_sql(&mut client, &query.sql, &query.params)),
         vec![(3, "Cara".to_owned())]
     );
 }

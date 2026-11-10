@@ -1,9 +1,10 @@
-use datagrid_query::{Value, build_merge};
+use datagrid_query::{MutationOptions, Value, build_merge};
 
-mod support;
-use support::{
-    PgliteServer, create_mutation_tables, membership_options, merge_widget_options,
-    mutation_row as row, run_mutation, text,
+#[path = "../helpers/mod.rs"]
+mod helpers;
+use helpers::{
+    PgliteServer, create_mutation_tables, membership_options, mutation_row as row, run_mutation,
+    widget_options,
 };
 
 #[test]
@@ -19,26 +20,30 @@ fn executes_merge_against_pglite() {
         )
         .unwrap();
 
-    let mutation = build_merge(&merge_widget_options()).unwrap();
+    let mutation = build_merge(&MutationOptions {
+        table: "merge_widgets".to_owned(),
+        ..widget_options()
+    })
+    .unwrap();
     let rows = vec![
         row(&[
             ("id", Value::Int(100)),
             ("version", Value::Int(3)),
-            ("name", text("patched")),
-            ("created_at", text("ignored")),
+            ("name", Value::Text("patched".to_owned())),
+            ("created_at", Value::Text("ignored".to_owned())),
         ]),
         row(&[
             ("id", Value::Int(200)),
-            ("name", text("new")),
-            ("note", text("new-note")),
-            ("updated_at", text("u2")),
+            ("name", Value::Text("new".to_owned())),
+            ("note", Value::Text("new-note".to_owned())),
+            ("updated_at", Value::Text("u2".to_owned())),
             ("version", Value::Int(1)),
         ]),
         row(&[
             ("id", Value::Int(100)),
             ("version", Value::Int(2)),
-            ("name", text("stale")),
-            ("created_at", text("ignored2")),
+            ("name", Value::Text("stale".to_owned())),
+            ("created_at", Value::Text("ignored2".to_owned())),
         ]),
     ];
     run_mutation(&mut client, &mutation, &rows);
@@ -77,7 +82,11 @@ fn executes_merge_against_pglite() {
     assert_ne!(timestamps[0].get::<_, String>("updated_at"), "u0");
     assert_eq!(timestamps[1].get::<_, String>("updated_at"), "u2");
 
-    let second = build_merge(&merge_widget_options()).unwrap();
+    let second = build_merge(&MutationOptions {
+        table: "merge_widgets".to_owned(),
+        ..widget_options()
+    })
+    .unwrap();
     let second_rows = vec![
         row(&[
             ("id", Value::Int(200)),
@@ -86,10 +95,10 @@ fn executes_merge_against_pglite() {
         ]),
         row(&[
             ("id", Value::Int(300)),
-            ("name", text("new3")),
-            ("note", text("n3")),
-            ("created_at", text("c3")),
-            ("updated_at", text("u3")),
+            ("name", Value::Text("new3".to_owned())),
+            ("note", Value::Text("n3".to_owned())),
+            ("created_at", Value::Text("c3".to_owned())),
+            ("updated_at", Value::Text("u3".to_owned())),
             ("version", Value::Int(1)),
         ]),
     ];
@@ -140,12 +149,12 @@ fn executes_composite_merge_against_pglite() {
         row(&[
             ("tenant_id", Value::Int(1)),
             ("user_id", Value::Int(20)),
-            ("role", text("manager")),
+            ("role", Value::Text("manager".to_owned())),
         ]),
         row(&[
             ("tenant_id", Value::Int(2)),
             ("user_id", Value::Int(30)),
-            ("role", text("owner")),
+            ("role", Value::Text("owner".to_owned())),
         ]),
     ];
     run_mutation(&mut client, &mutation, &rows);

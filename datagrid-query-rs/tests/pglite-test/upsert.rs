@@ -1,9 +1,10 @@
 use datagrid_query::{Value, build_upsert};
 
-mod support;
-use support::{
+#[path = "../helpers/mod.rs"]
+mod helpers;
+use helpers::{
     PgliteServer, create_mutation_tables, membership_options, mutation_row as row, run_mutation,
-    text, widget_options,
+    widget_options,
 };
 
 #[test]
@@ -24,22 +25,22 @@ fn executes_upsert_against_pglite() {
     let rows = vec![
         row(&[
             ("id", Value::Int(100)),
-            ("name", text("alpha3")),
-            ("note", text("n2")),
-            ("created_at", text("ignored")),
-            ("updated_at", text("u3")),
+            ("name", Value::Text("alpha3".to_owned())),
+            ("note", Value::Text("n2".to_owned())),
+            ("created_at", Value::Text("ignored".to_owned())),
+            ("updated_at", Value::Text("u3".to_owned())),
             ("version", Value::Int(2)),
         ]),
         row(&[
             ("id", Value::Int(200)),
-            ("name", text("gamma")),
-            ("created_at", text("c3")),
-            ("updated_at", text("u3")),
+            ("name", Value::Text("gamma".to_owned())),
+            ("created_at", Value::Text("c3".to_owned())),
+            ("updated_at", Value::Text("u3".to_owned())),
             ("version", Value::Int(1)),
         ]),
         row(&[
             ("id", Value::Int(9000)),
-            ("name", text("stale")),
+            ("name", Value::Text("stale".to_owned())),
             ("version", Value::Int(1)),
         ]),
     ];
@@ -97,12 +98,12 @@ fn executes_composite_upsert_against_pglite() {
         row(&[
             ("tenant_id", Value::Int(1)),
             ("user_id", Value::Int(10)),
-            ("role", text("super")),
+            ("role", Value::Text("super".to_owned())),
         ]),
         row(&[
             ("tenant_id", Value::Int(2)),
             ("user_id", Value::Int(30)),
-            ("role", text("owner")),
+            ("role", Value::Text("owner".to_owned())),
         ]),
     ];
     run_mutation(&mut client, &mutation, &rows);

@@ -1,9 +1,10 @@
 use datagrid_query::{Value, build_update};
 
-mod support;
-use support::{
+#[path = "../helpers/mod.rs"]
+mod helpers;
+use helpers::{
     PgliteServer, create_mutation_tables, membership_options, mutation_row as row, run_mutation,
-    text, widget_options,
+    widget_options,
 };
 
 #[test]
@@ -25,14 +26,14 @@ fn executes_update_against_pglite() {
         row(&[
             ("id", Value::Int(100)),
             ("version", Value::Int(1)),
-            ("name", text("alpha2")),
-            ("note", text("n1")),
-            ("updated_at", text("u2")),
+            ("name", Value::Text("alpha2".to_owned())),
+            ("note", Value::Text("n1".to_owned())),
+            ("updated_at", Value::Text("u2".to_owned())),
         ]),
         row(&[
             ("id", Value::Int(9000)),
             ("version", Value::Int(1)),
-            ("name", text("beta2")),
+            ("name", Value::Text("beta2".to_owned())),
         ]),
     ];
     run_mutation(&mut client, &mutation, &rows);
@@ -83,7 +84,7 @@ fn executes_update_against_pglite() {
     let stale_rows = vec![row(&[
         ("id", Value::Int(9000)),
         ("version", Value::Int(1)),
-        ("name", text("stale")),
+        ("name", Value::Text("stale".to_owned())),
     ])];
     run_mutation(&mut client, &stale, &stale_rows);
 
@@ -115,7 +116,7 @@ fn executes_composite_update_against_pglite() {
     let rows = vec![row(&[
         ("tenant_id", Value::Int(1)),
         ("user_id", Value::Int(20)),
-        ("role", text("manager")),
+        ("role", Value::Text("manager".to_owned())),
     ])];
     run_mutation(&mut client, &mutation, &rows);
 

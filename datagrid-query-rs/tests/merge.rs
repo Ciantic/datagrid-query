@@ -1,22 +1,23 @@
-use datagrid_query::{MutationOptions, Value, build_merge};
-mod support;
-use support::{bind, merge_widget_options, mutation_row as row, text};
-
-fn array(values: Vec<Value>) -> Value {
-    Value::Array(values)
-}
+use datagrid_query::{MutationOptions, Value, bind_mutation_rows, build_merge};
+mod helpers;
+use helpers::{mutation_row as row, widget_options};
 
 #[test]
 fn builds_merge_with_per_field_patch_semantics() {
-    let mutation = build_merge(&merge_widget_options()).unwrap();
-    let params = bind(
+    let mutation = build_merge(&MutationOptions {
+        table: "merge_widgets".to_owned(),
+        ..widget_options()
+    })
+    .unwrap();
+    let params = bind_mutation_rows(
         &mutation,
         &[row(&[
             ("id", Value::Int(100)),
             ("version", Value::Int(3)),
-            ("name", text("patched")),
+            ("name", Value::Text("patched".to_owned())),
         ])],
-    );
+    )
+    .unwrap();
 
     assert_eq!(
         mutation.sql,
@@ -25,18 +26,18 @@ fn builds_merge_with_per_field_patch_semantics() {
     assert_eq!(
         params,
         vec![
-            array(vec![Value::Int(100)]),
-            array(vec![Value::Bool(true)]),
-            array(vec![text("patched")]),
-            array(vec![Value::Bool(true)]),
-            array(vec![Value::Null]),
-            array(vec![Value::Bool(false)]),
-            array(vec![Value::Null]),
-            array(vec![Value::Bool(false)]),
-            array(vec![Value::Null]),
-            array(vec![Value::Bool(false)]),
-            array(vec![Value::Int(3)]),
-            array(vec![Value::Bool(true)]),
+            Value::Array(vec![Value::Int(100)]),
+            Value::Array(vec![Value::Bool(true)]),
+            Value::Array(vec![Value::Text("patched".to_owned())]),
+            Value::Array(vec![Value::Bool(true)]),
+            Value::Array(vec![Value::Null]),
+            Value::Array(vec![Value::Bool(false)]),
+            Value::Array(vec![Value::Null]),
+            Value::Array(vec![Value::Bool(false)]),
+            Value::Array(vec![Value::Null]),
+            Value::Array(vec![Value::Bool(false)]),
+            Value::Array(vec![Value::Int(3)]),
+            Value::Array(vec![Value::Bool(true)]),
         ]
     );
 }
@@ -49,12 +50,12 @@ fn accepts_typescript_merge_json() {
     let rows = vec![
         row(&[
             ("id", Value::Int(100)),
-            ("name", text("alpha")),
+            ("name", Value::Text("alpha".to_owned())),
             ("version", Value::Int(2)),
         ]),
-        row(&[("name", text("beta"))]),
+        row(&[("name", Value::Text("beta".to_owned()))]),
     ];
-    bind(&mutation, &rows);
+    bind_mutation_rows(&mutation, &rows).unwrap();
 
     assert!(mutation.sql.starts_with(r#"MERGE INTO "widgets" AS u"#));
     assert!(

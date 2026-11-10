@@ -1,18 +1,15 @@
-use datagrid_query::{MutationOptions, QueryError, Value, bind_mutation_rows, build_delete};
-mod support;
-use support::{bind, mutation_column as column, mutation_row as row, widget_options};
-
-fn array(values: Vec<Value>) -> Value {
-    Value::Array(values)
-}
+use datagrid_query::{QueryError, Value, bind_mutation_rows, build_delete};
+mod helpers;
+use helpers::{membership_options, mutation_row as row, widget_options};
 
 #[test]
 fn builds_batch_delete_with_version_locking() {
     let mutation = build_delete(&widget_options()).unwrap();
-    let params = bind(
+    let params = bind_mutation_rows(
         &mutation,
         &[row(&[("id", Value::Int(1)), ("version", Value::Int(1))])],
-    );
+    )
+    .unwrap();
 
     assert_eq!(
         mutation.sql,
@@ -20,7 +17,10 @@ fn builds_batch_delete_with_version_locking() {
     );
     assert_eq!(
         params,
-        vec![array(vec![Value::Int(1)]), array(vec![Value::Int(1)]),]
+        vec![
+            Value::Array(vec![Value::Int(1)]),
+            Value::Array(vec![Value::Int(1)]),
+        ]
     );
 }
 
@@ -37,18 +37,7 @@ fn rejects_missing_delete_key() {
 
 #[test]
 fn builds_composite_primary_key_delete() {
-    let options = MutationOptions {
-        table: "memberships".to_owned(),
-        schema: None,
-        columns: vec![
-            column("tenant_id", "bigint"),
-            column("user_id", "bigint"),
-            column("role", "text"),
-        ],
-        primary_key: vec!["tenant_id".to_owned(), "user_id".to_owned()],
-        version_column: None,
-        returning: None,
-    };
+    let options = membership_options();
     let mutation = build_delete(&options).unwrap();
 
     assert_eq!(

@@ -1,20 +1,20 @@
 use datagrid_query::{
     BuiltMutation, MutationOptions, QueryError, Value, bind_mutation_rows, build_insert,
 };
-mod support;
-use support::{bind, mutation_row as row, text, widget_options};
-
-fn array(values: Vec<Value>) -> Value {
-    Value::Array(values)
-}
+mod helpers;
+use helpers::{mutation_row as row, widget_options};
 
 #[test]
 fn builds_batch_insert_with_defaults_and_presence_flags() {
     let mutation = build_insert(&widget_options()).unwrap();
-    let params = bind(
+    let params = bind_mutation_rows(
         &mutation,
-        &[row(&[("id", Value::Int(1)), ("name", text("a"))])],
-    );
+        &[row(&[
+            ("id", Value::Int(1)),
+            ("name", Value::Text("a".to_owned())),
+        ])],
+    )
+    .unwrap();
 
     assert_eq!(
         mutation.sql,
@@ -23,16 +23,16 @@ fn builds_batch_insert_with_defaults_and_presence_flags() {
     assert_eq!(
         params,
         vec![
-            array(vec![Value::Int(1)]),
-            array(vec![Value::Bool(true)]),
-            array(vec![text("a")]),
-            array(vec![Value::Null]),
-            array(vec![Value::Null]),
-            array(vec![Value::Bool(false)]),
-            array(vec![Value::Null]),
-            array(vec![Value::Bool(false)]),
-            array(vec![Value::Null]),
-            array(vec![Value::Bool(false)]),
+            Value::Array(vec![Value::Int(1)]),
+            Value::Array(vec![Value::Bool(true)]),
+            Value::Array(vec![Value::Text("a".to_owned())]),
+            Value::Array(vec![Value::Null]),
+            Value::Array(vec![Value::Null]),
+            Value::Array(vec![Value::Bool(false)]),
+            Value::Array(vec![Value::Null]),
+            Value::Array(vec![Value::Bool(false)]),
+            Value::Array(vec![Value::Null]),
+            Value::Array(vec![Value::Bool(false)]),
         ]
     );
 }

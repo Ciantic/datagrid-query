@@ -1,9 +1,10 @@
 use datagrid_query::{Value, build_insert};
 
-mod support;
-use support::{
+#[path = "../helpers/mod.rs"]
+mod helpers;
+use helpers::{
     PgliteServer, create_mutation_tables, membership_options, mutation_row as row, run_mutation,
-    text, widget_options,
+    widget_options,
 };
 
 #[test]
@@ -15,13 +16,13 @@ fn executes_insert_against_pglite() {
     let rows = vec![
         row(&[
             ("id", Value::Int(100)),
-            ("name", text("alpha")),
-            ("note", text("n0")),
-            ("created_at", text("c1")),
-            ("updated_at", text("u1")),
+            ("name", Value::Text("alpha".to_owned())),
+            ("note", Value::Text("n0".to_owned())),
+            ("created_at", Value::Text("c1".to_owned())),
+            ("updated_at", Value::Text("u1".to_owned())),
             ("version", Value::Int(1)),
         ]),
-        row(&[("name", text("beta"))]),
+        row(&[("name", Value::Text("beta".to_owned()))]),
     ];
     run_mutation(&mut client, &mutation, &rows);
 
@@ -56,12 +57,12 @@ fn executes_composite_insert_against_pglite() {
         row(&[
             ("tenant_id", Value::Int(1)),
             ("user_id", Value::Int(10)),
-            ("role", text("admin")),
+            ("role", Value::Text("admin".to_owned())),
         ]),
         row(&[
             ("tenant_id", Value::Int(1)),
             ("user_id", Value::Int(20)),
-            ("role", text("user")),
+            ("role", Value::Text("user".to_owned())),
         ]),
     ];
     run_mutation(&mut client, &mutation, &rows);

@@ -1,22 +1,19 @@
-use datagrid_query::{MutationOptions, QueryError, Value, bind_mutation_rows, build_update};
-mod support;
-use support::{bind, mutation_column as column, mutation_row as row, text, widget_options};
-
-fn array(values: Vec<Value>) -> Value {
-    Value::Array(values)
-}
+use datagrid_query::{QueryError, Value, bind_mutation_rows, build_update};
+mod helpers;
+use helpers::{membership_options, mutation_row as row, widget_options};
 
 #[test]
 fn builds_batch_update_with_presence_flags_and_version_locking() {
     let mutation = build_update(&widget_options()).unwrap();
-    let params = bind(
+    let params = bind_mutation_rows(
         &mutation,
         &[row(&[
             ("id", Value::Int(1)),
             ("version", Value::Int(1)),
-            ("name", text("b")),
+            ("name", Value::Text("b".to_owned())),
         ])],
-    );
+    )
+    .unwrap();
 
     assert_eq!(
         mutation.sql,
@@ -25,14 +22,14 @@ fn builds_batch_update_with_presence_flags_and_version_locking() {
     assert_eq!(
         params,
         vec![
-            array(vec![Value::Int(1)]),
-            array(vec![Value::Int(1)]),
-            array(vec![text("b")]),
-            array(vec![Value::Bool(true)]),
-            array(vec![Value::Null]),
-            array(vec![Value::Bool(false)]),
-            array(vec![Value::Null]),
-            array(vec![Value::Bool(false)]),
+            Value::Array(vec![Value::Int(1)]),
+            Value::Array(vec![Value::Int(1)]),
+            Value::Array(vec![Value::Text("b".to_owned())]),
+            Value::Array(vec![Value::Bool(true)]),
+            Value::Array(vec![Value::Null]),
+            Value::Array(vec![Value::Bool(false)]),
+            Value::Array(vec![Value::Null]),
+            Value::Array(vec![Value::Bool(false)]),
         ]
     );
 }
@@ -50,18 +47,7 @@ fn rejects_missing_update_version() {
 
 #[test]
 fn builds_composite_primary_key_update() {
-    let options = MutationOptions {
-        table: "memberships".to_owned(),
-        schema: None,
-        columns: vec![
-            column("tenant_id", "bigint"),
-            column("user_id", "bigint"),
-            column("role", "text"),
-        ],
-        primary_key: vec!["tenant_id".to_owned(), "user_id".to_owned()],
-        version_column: None,
-        returning: None,
-    };
+    let options = membership_options();
     let mutation = build_update(&options).unwrap();
 
     assert_eq!(

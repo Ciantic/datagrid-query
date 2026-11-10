@@ -1,7 +1,8 @@
 use datagrid_query::{Value, build_delete};
 
-mod support;
-use support::{
+#[path = "../helpers/mod.rs"]
+mod helpers;
+use helpers::{
     PgliteServer, create_mutation_tables, membership_options, mutation_row as row, run_mutation,
     widget_options,
 };
@@ -30,7 +31,7 @@ fn executes_delete_against_pglite() {
     let after_stale = client
         .query(r#"SELECT "id" FROM "widgets" ORDER BY "id""#, &[])
         .unwrap();
-    assert_eq!(support::ids(&after_stale), vec![100, 200]);
+    assert_eq!(helpers::ids(&after_stale), vec![100, 200]);
 
     let delete = build_delete(&widget_options()).unwrap();
     run_mutation(
@@ -42,7 +43,7 @@ fn executes_delete_against_pglite() {
     let remaining = client
         .query(r#"SELECT "id" FROM "widgets" ORDER BY "id""#, &[])
         .unwrap();
-    assert_eq!(support::ids(&remaining), vec![100]);
+    assert_eq!(helpers::ids(&remaining), vec![100]);
 }
 
 #[test]

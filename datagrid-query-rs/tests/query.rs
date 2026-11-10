@@ -30,10 +30,6 @@ fn condition(column: &str, operator: FilterOperator, value: Option<Value>) -> Fi
     })
 }
 
-fn text(value: &str) -> Value {
-    Value::Text(value.to_owned())
-}
-
 fn sort(column: &str, direction: SortDirection) -> Sort {
     Sort {
         column: column.to_owned(),
@@ -67,14 +63,21 @@ fn builds_filtered_sorted_paginated_query() {
 fn combines_top_level_and_with_nested_or_groups() {
     let mut options = blank(table("people"));
     options.filters = vec![
-        condition("name", FilterOperator::ILike, Some(text("a%"))),
+        condition(
+            "name",
+            FilterOperator::ILike,
+            Some(Value::Text("a%".to_owned())),
+        ),
         Filter::Group(FilterGroup {
             combinator: Combinator::Or,
             filters: vec![
                 condition(
                     "status",
                     FilterOperator::In,
-                    Some(Value::Array(vec![text("active"), text("pending")])),
+                    Some(Value::Array(vec![
+                        Value::Text("active".to_owned()),
+                        Value::Text("pending".to_owned()),
+                    ])),
                 ),
                 condition("deleted_at", FilterOperator::IsNull, None),
             ],
@@ -90,7 +93,11 @@ fn combines_top_level_and_with_nested_or_groups() {
     );
     assert_eq!(
         query.params,
-        vec![text("a%"), text("active"), text("pending")]
+        vec![
+            Value::Text("a%".to_owned()),
+            Value::Text("active".to_owned()),
+            Value::Text("pending".to_owned())
+        ]
     );
 }
 
@@ -202,7 +209,11 @@ fn offsets_outer_parameters_after_parameterised_subquery() {
             params: vec![Value::Int(18)],
         },
     });
-    options.filters = vec![condition("name", FilterOperator::Like, Some(text("C%")))];
+    options.filters = vec![condition(
+        "name",
+        FilterOperator::Like,
+        Some(Value::Text("C%".to_owned())),
+    )];
     options.sort = vec![sort("id", SortDirection::Asc)];
     options.limit = Some(5);
 
@@ -212,7 +223,10 @@ fn offsets_outer_parameters_after_parameterised_subquery() {
         query.sql,
         r#"SELECT * FROM (SELECT "id", "name", "age" FROM "people" WHERE "age" >= $1) AS "adults" WHERE "name" LIKE $2 ORDER BY "id" ASC LIMIT 5"#
     );
-    assert_eq!(query.params, vec![Value::Int(18), text("C%")]);
+    assert_eq!(
+        query.params,
+        vec![Value::Int(18), Value::Text("C%".to_owned())]
+    );
 }
 
 #[test]
