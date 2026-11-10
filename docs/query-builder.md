@@ -313,8 +313,8 @@ Both implementations use the same SQL shape and the same operator semantics.
 Their test suites cover the same cases, including parameter offsets after a
 sub-select, nested filter groups, empty `IN` lists, and identifier validation.
 
-Both suites also execute generated SQL against PGlite, including mutations.
-TypeScript uses the PGlite package directly. Rust starts the PGlite socket
-server from `datagrid-query-ts/scripts/pglite-server.mjs`, connects with the
-`postgres` crate, and runs the generated statements against real PostgreSQL
-semantics.
+Both suites also execute generated SQL against PGlite in their integration
+tests, including mutations. TypeScript uses the PGlite package directly. Rust
+starts the PGlite socket server from
+`datagrid-query-ts/scripts/pglite-server.mjs`, connects with the `postgres`
+crate, and runs the generated statements against real PostgreSQL semantics.

@@ -13,8 +13,10 @@ TypeScript query builder for data grids, tested against real PostgreSQL via
 
 ```bash
 pnpm install
-pnpm test        # runs the PGlite-backed test suite
-pnpm build       # emits dist/ (ESM + type declarations)
+pnpm test              # runs unit and PGlite-backed integration tests
+pnpm test:unit         # runs SQL-shape tests only
+pnpm test:integration  # runs PGlite-backed tests only
+pnpm build             # emits dist/ (ESM + type declarations)
 pnpm typecheck
 ```
 

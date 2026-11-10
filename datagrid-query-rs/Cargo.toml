@@ -14,3 +14,27 @@ serde_json = "1"
 
 [dev-dependencies]
 postgres = { version = "0.19", features = ["with-serde_json-1"] }
+
+[[test]]
+name = "pglite_delete"
+path = "tests/pglite-test/delete.rs"
+
+[[test]]
+name = "pglite_insert"
+path = "tests/pglite-test/insert.rs"
+
+[[test]]
+name = "pglite_merge"
+path = "tests/pglite-test/merge.rs"
+
+[[test]]
+name = "pglite_query"
+path = "tests/pglite-test/query.rs"
+
+[[test]]
+name = "pglite_update"
+path = "tests/pglite-test/update.rs"
+
+[[test]]
+name = "pglite_upsert"
+path = "tests/pglite-test/upsert.rs"

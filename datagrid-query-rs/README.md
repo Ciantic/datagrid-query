@@ -19,7 +19,8 @@ cargo fmt
 cargo clippy --all-targets -- -D warnings
 ```
 
-`cargo test` runs both SQL-shape tests and real queries against PGlite.
+`cargo test` runs both the unit tests in `tests/*.rs` and the PGlite-backed
+integration tests in `tests/pglite-test/`.
 
 ## Usage
 
