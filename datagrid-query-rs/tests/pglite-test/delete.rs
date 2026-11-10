@@ -31,7 +31,13 @@ fn executes_delete_against_pglite() {
     let after_stale = client
         .query(r#"SELECT "id" FROM "widgets" ORDER BY "id""#, &[])
         .unwrap();
-    assert_eq!(helpers::ids(&after_stale), vec![100, 200]);
+    assert_eq!(
+        after_stale
+            .iter()
+            .map(|row| row.get("id"))
+            .collect::<Vec<i64>>(),
+        vec![100, 200]
+    );
 
     let delete = build_delete(&widget_options()).unwrap();
     run_mutation(
@@ -43,7 +49,13 @@ fn executes_delete_against_pglite() {
     let remaining = client
         .query(r#"SELECT "id" FROM "widgets" ORDER BY "id""#, &[])
         .unwrap();
-    assert_eq!(helpers::ids(&remaining), vec![100]);
+    assert_eq!(
+        remaining
+            .iter()
+            .map(|row| row.get("id"))
+            .collect::<Vec<i64>>(),
+        vec![100]
+    );
 }
 
 #[test]

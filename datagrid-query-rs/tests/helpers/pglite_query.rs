@@ -12,40 +12,25 @@ pub(crate) fn run_sql(client: &mut Client, sql: &str, params: &[Value]) -> Vec<R
         .unwrap_or_else(|error| panic!("query failed: {error:?}\n{sql}"))
 }
 
-pub(crate) fn id_names(rows: &[Row]) -> Vec<(i64, String)> {
-    rows.iter()
-        .map(|row| (row.get("id"), row.get("name")))
-        .collect()
-}
-
-pub(crate) fn ids(rows: &[Row]) -> Vec<i64> {
-    rows.iter().map(|row| row.get("id")).collect()
-}
-
 fn to_sql_params(sql: &str, values: &[Value]) -> Vec<Box<dyn ToSql + Sync>> {
     let types = parameter_types(sql);
 
     values
         .iter()
         .enumerate()
-        .map(|(index, value)| match value {
-            Value::Null => boxed(Option::<String>::None),
-            Value::Bool(value) => boxed(*value),
-            Value::Int(value) => boxed(*value),
-            Value::Float(value) => boxed(*value),
-            Value::Text(value) => boxed(value.clone()),
-            Value::Bytes(value) => boxed(value.clone()),
-            Value::Array(values) => array_param(values, types.get(&(index + 1))),
-            Value::Json(value) => boxed(value.clone()),
+        .map(|(index, value)| -> Box<dyn ToSql + Sync> {
+            match value {
+                Value::Null => Box::new(Option::<String>::None),
+                Value::Bool(value) => Box::new(*value),
+                Value::Int(value) => Box::new(*value),
+                Value::Float(value) => Box::new(*value),
+                Value::Text(value) => Box::new(value.clone()),
+                Value::Bytes(value) => Box::new(value.clone()),
+                Value::Array(values) => array_param(values, types.get(&(index + 1))),
+                Value::Json(value) => Box::new(value.clone()),
+            }
         })
         .collect()
-}
-
-fn boxed<T>(value: T) -> Box<dyn ToSql + Sync>
-where
-    T: ToSql + Sync + 'static,
-{
-    Box::new(value)
 }
 
 fn parameter_types(sql: &str) -> BTreeMap<usize, String> {
@@ -95,7 +80,7 @@ fn parameter_types(sql: &str) -> BTreeMap<usize, String> {
 fn array_param(values: &[Value], data_type: Option<&String>) -> Box<dyn ToSql + Sync> {
     if let Some(data_type) = data_type {
         if data_type.ends_with("bool") {
-            return boxed(
+            return Box::new(
                 values
                     .iter()
                     .map(|value| match value {
@@ -108,7 +93,7 @@ fn array_param(values: &[Value], data_type: Option<&String>) -> Box<dyn ToSql + 
         }
 
         if data_type.contains("int") {
-            return boxed(
+            return Box::new(
                 values
                     .iter()
                     .map(|value| match value {
@@ -120,7 +105,7 @@ fn array_param(values: &[Value], data_type: Option<&String>) -> Box<dyn ToSql + 
             );
         }
 
-        return boxed(
+        return Box::new(
             values
                 .iter()
                 .map(|value| match value {
@@ -136,7 +121,7 @@ fn array_param(values: &[Value], data_type: Option<&String>) -> Box<dyn ToSql + 
         .iter()
         .all(|value| matches!(value, Value::Int(_) | Value::Null))
     {
-        return boxed(
+        return Box::new(
             values
                 .iter()
                 .map(|value| match value {
@@ -152,7 +137,7 @@ fn array_param(values: &[Value], data_type: Option<&String>) -> Box<dyn ToSql + 
         .iter()
         .all(|value| matches!(value, Value::Text(_) | Value::Null))
     {
-        return boxed(
+        return Box::new(
             values
                 .iter()
                 .map(|value| match value {
@@ -168,7 +153,7 @@ fn array_param(values: &[Value], data_type: Option<&String>) -> Box<dyn ToSql + 
         .iter()
         .all(|value| matches!(value, Value::Bool(_) | Value::Null))
     {
-        return boxed(
+        return Box::new(
             values
                 .iter()
                 .map(|value| match value {

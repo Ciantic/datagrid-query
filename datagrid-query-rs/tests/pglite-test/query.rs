@@ -5,7 +5,7 @@ use datagrid_query::{
 
 #[path = "../helpers/mod.rs"]
 mod helpers;
-use helpers::{PgliteServer, id_names, ids, run_sql};
+use helpers::{PgliteServer, run_sql};
 
 fn blank(source: QuerySource) -> QueryOptions {
     QueryOptions {
@@ -78,8 +78,11 @@ fn executes_generated_queries_against_pglite() {
     options.offset = Some(1);
 
     let query = build_query(&options).expect("query should build");
+    let rows = run_sql(&mut client, &query.sql, &query.params);
     assert_eq!(
-        id_names(&run_sql(&mut client, &query.sql, &query.params)),
+        rows.iter()
+            .map(|row| (row.get("id"), row.get("name")))
+            .collect::<Vec<(i64, String)>>(),
         vec![(3, "Cara".to_owned()), (4, "Dan".to_owned())]
     );
 
@@ -99,8 +102,9 @@ fn executes_generated_queries_against_pglite() {
     options.sort = vec![sort("id", SortDirection::Asc)];
 
     let query = build_query(&options).expect("query should build");
+    let rows = run_sql(&mut client, &query.sql, &query.params);
     assert_eq!(
-        ids(&run_sql(&mut client, &query.sql, &query.params)),
+        rows.iter().map(|row| row.get("id")).collect::<Vec<i64>>(),
         vec![1, 3]
     );
 
@@ -114,8 +118,9 @@ fn executes_generated_queries_against_pglite() {
     options.sort = vec![sort("score", SortDirection::Desc)];
 
     let query = build_query(&options).expect("query should build");
+    let rows = run_sql(&mut client, &query.sql, &query.params);
     assert_eq!(
-        ids(&run_sql(&mut client, &query.sql, &query.params)),
+        rows.iter().map(|row| row.get("id")).collect::<Vec<i64>>(),
         vec![1, 3, 2]
     );
 
@@ -129,8 +134,9 @@ fn executes_generated_queries_against_pglite() {
     options.sort = vec![sort("id", SortDirection::Asc)];
 
     let query = build_query(&options).expect("query should build");
+    let rows = run_sql(&mut client, &query.sql, &query.params);
     assert_eq!(
-        ids(&run_sql(&mut client, &query.sql, &query.params)),
+        rows.iter().map(|row| row.get("id")).collect::<Vec<i64>>(),
         vec![1, 3]
     );
 
@@ -151,8 +157,9 @@ fn executes_generated_queries_against_pglite() {
     options.sort = vec![sort("id", SortDirection::Asc)];
 
     let query = build_query(&options).expect("query should build");
+    let rows = run_sql(&mut client, &query.sql, &query.params);
     assert_eq!(
-        ids(&run_sql(&mut client, &query.sql, &query.params)),
+        rows.iter().map(|row| row.get("id")).collect::<Vec<i64>>(),
         vec![1, 2, 4]
     );
 
@@ -175,8 +182,11 @@ fn executes_generated_queries_against_pglite() {
     options.sort = vec![sort("id", SortDirection::Asc)];
 
     let query = build_query(&options).expect("query should build");
+    let rows = run_sql(&mut client, &query.sql, &query.params);
     assert_eq!(
-        id_names(&run_sql(&mut client, &query.sql, &query.params)),
+        rows.iter()
+            .map(|row| (row.get("id"), row.get("name")))
+            .collect::<Vec<(i64, String)>>(),
         vec![(3, "Cara".to_owned())]
     );
 }
