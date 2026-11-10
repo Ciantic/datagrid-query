@@ -55,5 +55,19 @@ assert_eq!(query.params, vec![Value::Int(18)]);
 `^[A-Za-z_][A-Za-z0-9_]*$` and quoted; user values are returned as bind
 parameters. Sub-select SQL is trusted input.
 
+## JSON bridge
+
+`QueryOptions` implements serde `Serialize` and `Deserialize`. Its JSON shape is
+the same as the TypeScript `QueryOptions` type, so options serialized on the
+TypeScript side can be deserialized and reused directly:
+
+```rust
+let options: datagrid_query_rs::QueryOptions = serde_json::from_str(&json)?;
+let query = datagrid_query_rs::build_query(&options)?;
+```
+
+Optional fields may be omitted, filter operators use the TypeScript names, and
+JSON objects in filter values become `Value::Json`.
+
 See [../docs/query-builder.md](../docs/query-builder.md) for the shared query
-model and operator semantics.
+model, operator semantics, and JSON bridge details.

@@ -1,3 +1,5 @@
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde_json::Value as JsonValue;
 use std::fmt;
 
 /// Build a parameterised `SELECT` statement without executing it.
@@ -32,67 +34,91 @@ pub fn build_query(options: &QueryOptions) -> Result<BuiltQuery, QueryError> {
     })
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct BuiltQuery {
     pub sql: String,
     pub params: Vec<Value>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct QueryOptions {
+    #[serde(flatten)]
     pub source: QuerySource,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub columns: Vec<SelectColumn>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub filters: Vec<Filter>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub sort: Vec<Sort>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub limit: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub offset: Option<u64>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(untagged)]
 pub enum QuerySource {
     Table {
-        schema: Option<String>,
+        #[serde(rename = "table")]
         name: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        schema: Option<String>,
     },
     Subquery {
-        sql: String,
-        alias: String,
-        params: Vec<Value>,
+        subquery: SubquerySource,
     },
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum SelectColumn {
-    Name(String),
-    Aliased { name: String, alias: String },
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SubquerySource {
+    pub sql: String,
+    pub alias: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub params: Vec<Value>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum SelectColumn {
+    Name(String),
+    Aliased {
+        name: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        alias: Option<String>,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(untagged)]
 pub enum Filter {
     Condition(FilterCondition),
     Group(FilterGroup),
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct FilterCondition {
     pub column: String,
     pub operator: FilterOperator,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub value: Option<Value>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct FilterGroup {
     pub combinator: Combinator,
     pub filters: Vec<Filter>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum Combinator {
     And,
     Or,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub enum FilterOperator {
     Eq,
     Neq,
@@ -101,8 +127,10 @@ pub enum FilterOperator {
     Lt,
     Lte,
     Like,
+    #[serde(rename = "ilike")]
     ILike,
     NotLike,
+    #[serde(rename = "notIlike")]
     NotILike,
     In,
     NotIn,
@@ -114,22 +142,27 @@ pub enum FilterOperator {
     NotBetween,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum SortDirection {
+    #[default]
     Asc,
     Desc,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum NullsOrder {
     First,
     Last,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Sort {
     pub column: String,
+    #[serde(default)]
     pub direction: SortDirection,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub nulls: Option<NullsOrder>,
 }
 
@@ -142,6 +175,53 @@ pub enum Value {
     Text(String),
     Bytes(Vec<u8>),
     Array(Vec<Value>),
+    Json(JsonValue),
+}
+
+impl Value {
+    fn from_json(value: JsonValue) -> Self {
+        match value {
+            JsonValue::Null => Self::Null,
+            JsonValue::Bool(value) => Self::Bool(value),
+            JsonValue::Number(value) => match value.as_i64() {
+                Some(value) => Self::Int(value),
+                None => Self::Float(value.as_f64().unwrap_or(f64::NAN)),
+            },
+            JsonValue::String(value) => Self::Text(value),
+            JsonValue::Array(values) => {
+                Self::Array(values.into_iter().map(Self::from_json).collect())
+            }
+            JsonValue::Object(_) => Self::Json(value),
+        }
+    }
+}
+
+impl Serialize for Value {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match self {
+            Self::Null => serializer.serialize_unit(),
+            Self::Bool(value) => serializer.serialize_bool(*value),
+            Self::Int(value) => serializer.serialize_i64(*value),
+            Self::Float(value) => serializer.serialize_f64(*value),
+            Self::Text(value) => serializer.serialize_str(value),
+            Self::Bytes(value) => serializer.serialize_bytes(value),
+            Self::Array(values) => values.serialize(serializer),
+            Self::Json(value) => value.serialize(serializer),
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for Value {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = JsonValue::deserialize(deserializer)?;
+        Ok(Self::from_json(value))
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -210,18 +290,14 @@ fn render_source(source: &QuerySource, params: &mut Vec<Value>) -> Result<String
                 None => Ok(table),
             }
         }
-        QuerySource::Subquery {
-            sql,
-            alias,
-            params: subquery_params,
-        } => {
-            if sql.trim().is_empty() {
+        QuerySource::Subquery { subquery } => {
+            if subquery.sql.trim().is_empty() {
                 return Err(QueryError::EmptySubquery);
             }
 
-            let alias = quote_identifier(alias, "subquery alias")?;
-            params.extend(subquery_params.iter().cloned());
-            Ok(format!("({sql}) AS {alias}"))
+            let alias = quote_identifier(&subquery.alias, "subquery alias")?;
+            params.extend(subquery.params.iter().cloned());
+            Ok(format!("({}) AS {alias}", subquery.sql))
         }
     }
 }
@@ -235,11 +311,16 @@ fn render_columns(columns: &[SelectColumn]) -> Result<String, QueryError> {
     for column in columns {
         match column {
             SelectColumn::Name(name) => rendered.push(quote_identifier(name, "column")?),
-            SelectColumn::Aliased { name, alias } => rendered.push(format!(
-                "{} AS {}",
-                quote_identifier(name, "column")?,
-                quote_identifier(alias, "column alias")?
-            )),
+            SelectColumn::Aliased { name, alias } => {
+                let name = quote_identifier(name, "column")?;
+                match alias {
+                    Some(alias) => rendered.push(format!(
+                        "{name} AS {}",
+                        quote_identifier(alias, "column alias")?
+                    )),
+                    None => rendered.push(name),
+                }
+            }
         }
     }
 

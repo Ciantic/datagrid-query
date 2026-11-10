@@ -122,6 +122,50 @@ order.
 values that are not safe integers. Rust represents them as `u64`. The builder
 emits `LIMIT` and `OFFSET` only when a value is present.
 
+## JSON transport from TypeScript to Rust
+
+Rust `QueryOptions` implements serde `Serialize` and `Deserialize` using the
+same JSON shape as the TypeScript `QueryOptions` type. A TypeScript caller can
+serialize its options directly:
+
+```ts
+import type { QueryOptions } from "datagrid-query-ts";
+
+const options = {
+  table: "people",
+  columns: ["id", { name: "first_name", alias: "firstName" }],
+  filters: [{ column: "age", operator: "gte", value: 18 }],
+  sort: [{ column: "name", direction: "asc" }],
+  limit: 50,
+} satisfies QueryOptions;
+
+const json = JSON.stringify(options);
+```
+
+The Rust side deserializes that JSON and builds the query:
+
+```rust
+use datagrid_query_rs::{build_query, QueryOptions};
+
+let options: QueryOptions = serde_json::from_str(&json)?;
+let query = build_query(&options)?;
+```
+
+The bridge uses these rules:
+
+- `table` / `schema` or `subquery` appear at the top level, exactly as in the
+  TypeScript type.
+- Optional TypeScript fields may be omitted.
+- Operator names use the TypeScript spelling, including `ilike` and `notIlike`.
+- Sort direction defaults to `asc` when omitted.
+- JSON strings, numbers, booleans, arrays, and `null` become the matching
+  `Value` variants. JSON objects become `Value::Json`.
+- An omitted filter value and an explicit JSON `null` are equivalent; both
+  deserialize to no value.
+- Serializing Rust options produces the same shape, so options can travel back
+  to TypeScript. `Value::Bytes` is the exception: `serde_json` writes it as a
+  number array, and it reads back as `Value::Array`.
+
 ## Security model
 
 - Identifiers are validated and quoted, so table, column, and alias names cannot

@@ -1,6 +1,7 @@
 use datagrid_query_rs::{
     Combinator, Filter, FilterCondition, FilterGroup, FilterOperator, NullsOrder, QueryError,
-    QueryOptions, QuerySource, SelectColumn, Sort, SortDirection, Value, build_query,
+    QueryOptions, QuerySource, SelectColumn, Sort, SortDirection, SubquerySource, Value,
+    build_query,
 };
 
 fn blank(source: QuerySource) -> QueryOptions {
@@ -195,9 +196,11 @@ fn passes_id_array_as_one_any_parameter() {
 #[test]
 fn offsets_outer_parameters_after_parameterised_subquery() {
     let mut options = blank(QuerySource::Subquery {
-        sql: r#"SELECT "id", "name", "age" FROM "people" WHERE "age" >= $1"#.to_owned(),
-        alias: "adults".to_owned(),
-        params: vec![Value::Int(18)],
+        subquery: SubquerySource {
+            sql: r#"SELECT "id", "name", "age" FROM "people" WHERE "age" >= $1"#.to_owned(),
+            alias: "adults".to_owned(),
+            params: vec![Value::Int(18)],
+        },
     });
     options.filters = vec![condition("name", FilterOperator::Like, Some(text("C%")))];
     options.sort = vec![sort("id", SortDirection::Asc)];
@@ -220,7 +223,7 @@ fn supports_schema_qualified_tables_column_aliases_and_nulls_ordering() {
     });
     options.columns = vec![SelectColumn::Aliased {
         name: "first_name".to_owned(),
-        alias: "firstName".to_owned(),
+        alias: Some("firstName".to_owned()),
     }];
     options.filters = vec![condition("id", FilterOperator::Eq, Some(Value::Int(1)))];
     options.sort = vec![Sort {
@@ -287,9 +290,11 @@ fn rejects_identifiers_that_are_not_plain_sql_names() {
     ));
 
     let options = blank(QuerySource::Subquery {
-        sql: r#"SELECT * FROM "people""#.to_owned(),
-        alias: "bad alias".to_owned(),
-        params: Vec::new(),
+        subquery: SubquerySource {
+            sql: r#"SELECT * FROM "people""#.to_owned(),
+            alias: "bad alias".to_owned(),
+            params: Vec::new(),
+        },
     });
     assert!(matches!(
         build_query(&options),
@@ -329,9 +334,11 @@ fn rejects_invalid_filter_values() {
 #[test]
 fn rejects_an_empty_subquery() {
     let options = blank(QuerySource::Subquery {
-        sql: "   ".to_owned(),
-        alias: "source".to_owned(),
-        params: Vec::new(),
+        subquery: SubquerySource {
+            sql: "   ".to_owned(),
+            alias: "source".to_owned(),
+            params: Vec::new(),
+        },
     });
 
     assert_eq!(build_query(&options), Err(QueryError::EmptySubquery));

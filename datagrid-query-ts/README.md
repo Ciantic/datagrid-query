@@ -56,5 +56,9 @@ input throws an error named `QueryError`. Identifiers are validated against
 `^[A-Za-z_][A-Za-z0-9_]*$` and quoted; user values are returned as bind
 parameters. Sub-select SQL is trusted input.
 
+The options accepted by `buildQuery` use the same JSON shape as the Rust
+`QueryOptions` serde representation, so `JSON.stringify(options)` can be sent to
+the Rust implementation and deserialized there.
+
 See [../docs/query-builder.md](../docs/query-builder.md) for the shared query
 model and operator semantics.
