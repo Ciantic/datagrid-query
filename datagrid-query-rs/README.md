@@ -5,13 +5,11 @@ Rust query builder for data grids. It builds parameterised `SELECT`, `INSERT`,
 
 ## Development
 
-The integration test starts PGlite in socket-server mode through the Node
-script in `../datagrid-query-ts/scripts/pglite-server.mjs`. Install the
-TypeScript dependencies once before running it:
-
-```bash
-(cd ../datagrid-query-ts && pnpm install)
-```
+The integration tests start PGlite in socket-server mode with a script embedded
+in the test support module. Bun runs that script and caches the pinned PGlite
+packages in its global module cache, so no JavaScript install step is needed.
+The first run downloads them, which requires network access. Install
+[Bun](https://bun.sh) first; the tests are verified with Bun 1.4.
 
 ```bash
 cargo test

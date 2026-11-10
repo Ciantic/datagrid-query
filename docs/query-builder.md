@@ -315,6 +315,6 @@ sub-select, nested filter groups, empty `IN` lists, and identifier validation.
 
 Both suites also execute generated SQL against PGlite in their integration
 tests, including mutations. TypeScript uses the PGlite package directly. Rust
-starts the PGlite socket server from
-`datagrid-query-ts/scripts/pglite-server.mjs`, connects with the `postgres`
-crate, and runs the generated statements against real PostgreSQL semantics.
+starts the PGlite socket server with Bun from a script embedded in its test
+support code, connects with the `postgres` crate, and runs the generated
+statements against real PostgreSQL semantics.

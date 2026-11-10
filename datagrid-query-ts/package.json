@@ -37,7 +37,6 @@
   "packageManager": "pnpm@11.9.0",
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.16",
-    "@electric-sql/pglite-socket": "0.2.19",
     "@types/node": "^24.0.0",
     "typescript": "^5.9.0",
     "vitest": "^3.2.0"

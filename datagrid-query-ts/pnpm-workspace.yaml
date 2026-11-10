@@ -9,4 +9,3 @@ minimumReleaseAgeExclude:
   - '@electric-sql/pglite-pg_uuidv7@0.0.17'
   - '@electric-sql/pglite-pgtap@0.0.17'
   - '@electric-sql/pglite-pgvector@0.0.17'
-  - '@electric-sql/pglite-socket@0.2.19'

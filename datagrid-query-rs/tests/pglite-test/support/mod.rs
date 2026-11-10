@@ -9,10 +9,45 @@ use postgres::types::ToSql;
 use postgres::{Client, NoTls, Row};
 use std::collections::BTreeMap;
 use std::net::TcpListener;
-use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
 use std::thread;
 use std::time::{Duration, Instant};
+
+const PGLITE_SERVER_SCRIPT: &str = r#"
+import { PGlite } from "@electric-sql/pglite@0.5.16";
+import { PGLiteSocketServer } from "@electric-sql/pglite-socket@0.2.19";
+
+const host = process.env.PGLITE_HOST ?? "127.0.0.1";
+const port = Number(process.env.PGLITE_PORT);
+
+if (!Number.isInteger(port) || port <= 0) {
+  console.error("PGLITE_PORT must be a positive integer");
+  process.exit(1);
+}
+
+const db = await PGlite.create();
+const server = new PGLiteSocketServer({ db, host, port });
+
+try {
+  await server.start();
+} catch (error) {
+  console.error(error);
+  await db.close();
+  process.exit(1);
+}
+
+async function shutdown() {
+  try {
+    await server.stop();
+  } finally {
+    await db.close();
+  }
+  process.exit(0);
+}
+
+process.on("SIGINT", shutdown);
+process.on("SIGTERM", shutdown);
+"#;
 
 pub(crate) struct PgliteServer {
     child: Child,
@@ -21,24 +56,16 @@ pub(crate) struct PgliteServer {
 impl PgliteServer {
     pub(crate) fn start() -> (Self, Client) {
         let port = free_port();
-        let project_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .parent()
-            .expect("Rust crate should have a parent directory")
-            .join("datagrid-query-ts");
-        let script = project_dir.join("scripts/pglite-server.mjs");
 
-        let child = Command::new("node")
-            .arg(&script)
-            .current_dir(&project_dir)
+        let child = Command::new("bun")
+            .args(["--install=fallback", "--eval", PGLITE_SERVER_SCRIPT])
+            .current_dir(env!("CARGO_MANIFEST_DIR"))
             .env("PGLITE_PORT", port.to_string())
             .stdout(Stdio::null())
             .stderr(Stdio::inherit())
             .spawn()
             .unwrap_or_else(|error| {
-                panic!(
-                    "failed to start `node {}`: {error}. Run `pnpm install` in datagrid-query-ts first.",
-                    script.display()
-                )
+                panic!("failed to start `bun`: {error}. Install Bun from https://bun.sh first.")
             });
 
         let mut server = Self { child };
@@ -50,7 +77,7 @@ impl PgliteServer {
         let connection = format!(
             "host=127.0.0.1 port={port} user=postgres password=postgres dbname=postgres connect_timeout=1"
         );
-        let deadline = Instant::now() + Duration::from_secs(20);
+        let deadline = Instant::now() + Duration::from_secs(60);
 
         loop {
             if let Some(status) = self.child.try_wait().expect("failed to poll PGlite server") {
