@@ -6,11 +6,21 @@ statement. It does not execute anything.
 
 ## Development
 
+The integration test starts PGlite in socket-server mode through the Node
+script in `../datagrid-query-ts/scripts/pglite-server.mjs`. Install the
+TypeScript dependencies once before running it:
+
+```bash
+(cd ../datagrid-query-ts && pnpm install)
+```
+
 ```bash
 cargo test
 cargo fmt
 cargo clippy --all-targets -- -D warnings
 ```
+
+`cargo test` runs both SQL-shape tests and real queries against PGlite.
 
 ## Usage
 
