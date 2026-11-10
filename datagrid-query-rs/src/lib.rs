@@ -5,6 +5,7 @@ use std::fmt;
 
 mod delete;
 mod insert;
+mod merge;
 mod mutation;
 mod query;
 mod shared;
@@ -13,6 +14,7 @@ mod upsert;
 
 pub use delete::build_delete;
 pub use insert::build_insert;
+pub use merge::build_merge;
 pub use query::build_query;
 pub use update::build_update;
 pub use upsert::build_upsert;

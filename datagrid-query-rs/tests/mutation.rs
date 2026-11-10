@@ -1,6 +1,6 @@
 use datagrid_query_rs::{
     MutationColumn, MutationOptions, MutationRow, QueryError, Value, build_delete, build_insert,
-    build_update, build_upsert,
+    build_merge, build_update, build_upsert,
 };
 use std::collections::BTreeMap;
 
@@ -152,6 +152,41 @@ fn builds_upsert_with_conflict_update_and_version_locking() {
 }
 
 #[test]
+fn builds_merge_with_per_field_patch_semantics() {
+    let options = widget_options(vec![row(&[
+        ("id", Value::Int(100)),
+        ("version", Value::Int(3)),
+        ("name", text("patched")),
+    ])]);
+
+    let query = build_merge(&options).unwrap();
+
+    assert!(
+        query
+            .sql
+            .starts_with(r#"MERGE INTO "widgets" AS u USING unnest("#)
+    );
+    assert!(query.sql.contains(r#"ON u."id" = v."id""#));
+    assert!(
+        query
+            .sql
+            .contains(r#"WHEN MATCHED AND u."version" = v."version" THEN UPDATE SET"#)
+    );
+    assert!(
+        query
+            .sql
+            .contains(r#""name" = CASE WHEN v."name#present" THEN v."name" ELSE u."name" END"#)
+    );
+    assert!(query.sql.contains(
+        r#""updated_at" = CASE WHEN v."updated_at#present" THEN v."updated_at" ELSE now()::text END"#
+    ));
+    assert!(query.sql.contains(r#""version" = u."version" + 1"#));
+    assert!(query.sql.contains("WHEN NOT MATCHED THEN INSERT"));
+    assert!(query.sql.contains(r#"RETURNING u."id""#));
+    assert_eq!(query.params.len(), 12);
+}
+
+#[test]
 fn builds_batch_delete_with_version_locking() {
     let options = widget_options(vec![row(&[
         ("id", Value::Int(1)),
@@ -275,6 +310,9 @@ fn upsert_options_are_interchangeable_with_typescript_json() {
             .contains(r#""created_at" = excluded."created_at""#)
     );
     assert_eq!(query.params.len(), 10);
+
+    let merge = build_merge(&options).unwrap();
+    assert!(merge.sql.starts_with(r#"MERGE INTO "widgets" AS u"#));
 }
 
 #[test]

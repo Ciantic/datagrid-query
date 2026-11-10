@@ -53,7 +53,13 @@ const query = buildQuery({
 ## Mutations
 
 ```ts
-import { buildInsert, buildUpdate, buildUpsert, buildDelete } from "datagrid-query-ts";
+import {
+  buildInsert,
+  buildUpdate,
+  buildUpsert,
+  buildMerge,
+  buildDelete,
+} from "datagrid-query-ts";
 
 const options = {
   table: "people",
@@ -71,15 +77,18 @@ const options = {
 const insert = buildInsert(options);
 const update = buildUpdate(options);
 const upsert = buildUpsert(options);
+const merge = buildMerge(options);
 const remove = buildDelete(options);
 ```
 
 Mutation rows are partial. `insertDefaultSql` and `updateDefaultSql` control
 fallbacks for missing values, and `#present` boolean arrays carry presence
-through `unnest`.
+through `unnest`. `buildMerge` uses PostgreSQL `MERGE` and applies patch
+semantics on matched rows: omitted fields keep their existing values, while
+explicit `null` writes `NULL`.
 
-`buildQuery`, `buildInsert`, `buildUpdate`, `buildUpsert`, and `buildDelete` are
-the runtime exports; all other exports are types. Invalid input throws an error
+`buildQuery`, `buildInsert`, `buildUpdate`, `buildUpsert`, `buildMerge`, and
+`buildDelete` are the runtime exports; all other exports are types. Invalid input throws an error
 named `QueryError`. Identifiers are validated against
 `^[A-Za-z_][A-Za-z0-9_]*$` and quoted; user values are returned as bind
 parameters. Sub-select SQL and default SQL expressions are trusted input.
@@ -89,8 +98,8 @@ representations, so `JSON.stringify(options)` can be sent to the Rust
 implementation and deserialized there.
 
 The implementation is split by operation in `src/query.ts`, `src/insert.ts`,
-`src/update.ts`, `src/upsert.ts`, and `src/delete.ts`, with shared helpers in
-`src/shared.ts` and `src/mutation.ts`.
+`src/update.ts`, `src/upsert.ts`, `src/merge.ts`, and `src/delete.ts`, with
+shared helpers in `src/shared.ts` and `src/mutation.ts`.
 
 See [../docs/query-builder.md](../docs/query-builder.md) for the shared query
 model and operator semantics.

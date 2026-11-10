@@ -62,9 +62,15 @@ assert_eq!(query.params, vec![Value::Int(18)]);
 
 ## Mutations
 
-`build_insert`, `build_update`, `build_upsert`, and `build_delete` share
-`MutationOptions`. Rows are partial, and missing values use either a configured
-SQL default expression or the existing column value for updates.
+`build_insert`, `build_update`, `build_upsert`, `build_merge`, and
+`build_delete` share `MutationOptions`. Rows are partial, and missing values use
+either a configured SQL default expression or the existing column value for
+updates.
+
+`build_merge` uses PostgreSQL `MERGE` and applies patch semantics on matched
+rows: omitted fields keep their existing values, while explicit `null` writes
+`NULL`. Merge requires PostgreSQL 15 or newer; `MERGE ... RETURNING` requires
+PostgreSQL 17 or newer.
 
 ```rust
 use datagrid_query_rs::{
@@ -125,9 +131,9 @@ mutation columns use `insertDefaultSql` and `updateDefaultSql`, and JSON objects
 in filter values become `Value::Json`.
 
 The implementation is split by operation in `src/query.rs`, `src/insert.rs`,
-`src/update.rs`, `src/upsert.rs`, and `src/delete.rs`, with shared types in
-`src/lib.rs`, shared SQL helpers in `src/shared.rs`, and mutation helpers in
-`src/mutation.rs`.
+`src/update.rs`, `src/upsert.rs`, `src/merge.rs`, and `src/delete.rs`, with
+shared types in `src/lib.rs`, shared SQL helpers in `src/shared.rs`, and
+mutation helpers in `src/mutation.rs`.
 
 See [../docs/query-builder.md](../docs/query-builder.md) for the shared query
 model, operator semantics, JSON bridge, and mutation details.

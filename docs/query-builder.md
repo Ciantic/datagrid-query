@@ -8,6 +8,7 @@ Nothing connects to a database or executes a statement.
 | Select | `build_query(&QueryOptions)` | `buildQuery(options)` |
 | Insert | `build_insert(&MutationOptions)` | `buildInsert(options)` |
 | Upsert | `build_upsert(&MutationOptions)` | `buildUpsert(options)` |
+| Merge | `build_merge(&MutationOptions)` | `buildMerge(options)` |
 | Update | `build_update(&MutationOptions)` | `buildUpdate(options)` |
 | Delete | `build_delete(&MutationOptions)` | `buildDelete(options)` |
 
@@ -154,10 +155,10 @@ let options: QueryOptions = serde_json::from_str(&json)?;
 let query = build_query(&options)?;
 ```
 
-`MutationOptions` follows the same bridge, including `build_upsert`. The shared
-fixture `fixtures/upsert-options.json` is consumed by both test suites: the
-TypeScript suite parses and builds it, and the Rust suite deserializes it,
-re-serializes it, and builds the same upsert.
+`MutationOptions` follows the same bridge, including `build_upsert` and
+`build_merge`. The shared fixture `fixtures/upsert-options.json` is consumed by
+both test suites: the TypeScript suite parses and builds it, and the Rust suite
+deserializes it, re-serializes it, and builds the same upsert and merge.
 
 The bridge uses these rules:
 
@@ -237,6 +238,27 @@ Update and delete match rows by primary key. When `versionColumn` is set:
 Upsert uses `ON CONFLICT (primaryKey...)`. Non-key, updatable columns are
 assigned from `excluded`; `versionColumn` is incremented. If there is nothing to
 update, it emits `DO NOTHING`.
+
+Merge uses PostgreSQL `MERGE` and applies patch semantics on matched rows:
+omitted columns keep their existing values, explicit `null` writes `NULL`.
+Unmatched rows are inserted using the same `insertDefaultSql` rules as insert.
+Merge requires PostgreSQL 15 or newer; `RETURNING` on `MERGE` requires
+PostgreSQL 17 or newer. Set `returning: []` when running on 15 or 16.
+
+`MERGE` does not have the same concurrent-insert guarantee as `ON CONFLICT`.
+When two transactions race to create the same key, a concurrent `MERGE` can hit
+a unique-key error. Use `build_upsert` when that guarantee matters.
+
+```sql
+MERGE INTO "widgets" AS u
+USING unnest(...) AS v("id", "id#present", "name", "name#present", ...)
+ON u."id" = v."id"
+WHEN MATCHED AND u."version" = v."version" THEN UPDATE SET
+  "name" = CASE WHEN v."name#present" THEN v."name" ELSE u."name" END,
+  "version" = u."version" + 1
+WHEN NOT MATCHED THEN INSERT (...) VALUES (...)
+RETURNING u."id"
+```
 
 The parameter order follows the generated `unnest` list. Every parameter is an
 array: value arrays use the column type, and presence flags use `bool[]`.

@@ -4,6 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   buildDelete,
   buildInsert,
+  buildMerge,
   buildUpdate,
   buildUpsert,
 } from "../src/index.js";
@@ -53,6 +54,13 @@ function membershipOptions(rows: MutationRow[]): MutationOptions {
   };
 }
 
+function mergeWidgetOptions(rows: MutationRow[]): MutationOptions {
+  return {
+    ...widgetOptions(rows),
+    table: "merge_widgets",
+  };
+}
+
 const upsertFixture = JSON.parse(
   readFileSync(new URL("../../fixtures/upsert-options.json", import.meta.url), "utf8"),
 ) as MutationOptions;
@@ -76,6 +84,15 @@ beforeAll(async () => {
       user_id bigint NOT NULL,
       role text NOT NULL,
       PRIMARY KEY (tenant_id, user_id)
+    );
+
+    CREATE TABLE merge_widgets (
+      id bigint PRIMARY KEY,
+      name text NOT NULL,
+      note text,
+      created_at text NOT NULL,
+      updated_at text NOT NULL,
+      version bigint NOT NULL
     );
   `);
 });
@@ -145,6 +162,31 @@ describe("mutation builder SQL", () => {
     expect(fromJson.sql).toContain('WHERE u."version" = excluded."version"');
     expect(fromJson.sql).toContain('RETURNING u."id"');
     expect(fromJson.params).toHaveLength(10);
+
+    const merged = buildMerge(serialized);
+    expect(merged.sql).toContain('MERGE INTO "widgets" AS u');
+  });
+
+  it("builds a MERGE with per-field patch semantics", () => {
+    const query = buildMerge(
+      mergeWidgetOptions([{ id: 100, version: 3, name: "patched" }]),
+    );
+
+    expect(query.sql).toContain('MERGE INTO "merge_widgets" AS u USING unnest(');
+    expect(query.sql).toContain('ON u."id" = v."id"');
+    expect(query.sql).toContain(
+      'WHEN MATCHED AND u."version" = v."version" THEN UPDATE SET',
+    );
+    expect(query.sql).toContain(
+      '"name" = CASE WHEN v."name#present" THEN v."name" ELSE u."name" END',
+    );
+    expect(query.sql).toContain(
+      '"updated_at" = CASE WHEN v."updated_at#present" THEN v."updated_at" ELSE now()::text END',
+    );
+    expect(query.sql).toContain('"version" = u."version" + 1');
+    expect(query.sql).toContain("WHEN NOT MATCHED THEN INSERT");
+    expect(query.sql).toContain('RETURNING u."id"');
+    expect(query.params).toHaveLength(12);
   });
 
   it("builds a batch delete with version locking", () => {
@@ -255,6 +297,58 @@ describe("mutation execution", () => {
 
     const remaining = await db.query<{ id: number }>('SELECT "id" FROM "widgets" ORDER BY "id"');
     expect(remaining.rows).toEqual([{ id: 100 }, { id: 9000 }]);
+  });
+
+  it("executes MERGE as a patch-style upsert", async () => {
+    await db.exec(`
+      DELETE FROM merge_widgets;
+      INSERT INTO merge_widgets (id, name, note, created_at, updated_at, version)
+      VALUES (100, 'alpha', 'old-note', 'c0', 'u0', 3);
+    `);
+
+    const first = buildMerge(
+      mergeWidgetOptions([
+        { id: 100, version: 3, name: "patched" },
+        { id: 200, name: "new", note: "new-note", version: 1 },
+        { id: 100, version: 2, name: "stale" },
+      ]),
+    );
+    await db.query(first.sql, first.params);
+
+    const merged = await db.query<{
+      id: number;
+      name: string;
+      note: string | null;
+      version: number;
+    }>('SELECT "id", "name", "note", "version" FROM "merge_widgets" ORDER BY "id"');
+    expect(merged.rows).toEqual([
+      { id: 100, name: "patched", note: "old-note", version: 4 },
+      { id: 200, name: "new", note: "new-note", version: 1 },
+    ]);
+
+    const timestamps = await db.query<{
+      id: number;
+      created_at: string;
+      updated_at: string;
+    }>(
+      'SELECT "id", "created_at", "updated_at" FROM "merge_widgets" ORDER BY "id"',
+    );
+    expect(timestamps.rows[0]?.created_at).toBe("c0");
+    expect(timestamps.rows[0]?.updated_at).not.toBe("u0");
+    expect(timestamps.rows[1]?.created_at).toBeTruthy();
+    expect(timestamps.rows[1]?.updated_at).toBeTruthy();
+
+    const second = buildMerge(
+      mergeWidgetOptions([{ id: 200, version: 1, note: null }]),
+    );
+    await db.query(second.sql, second.params);
+
+    const patched = await db.query<{
+      name: string;
+      note: string | null;
+      version: number;
+    }>('SELECT "name", "note", "version" FROM "merge_widgets" WHERE "id" = 200');
+    expect(patched.rows).toEqual([{ name: "new", note: null, version: 2 }]);
   });
 
   it("executes composite primary keys without a version column", async () => {

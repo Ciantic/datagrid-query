@@ -1,7 +1,8 @@
 use datagrid_query_rs::{
     BuiltQuery, Combinator, Filter, FilterCondition, FilterGroup, FilterOperator, MutationColumn,
     MutationOptions, MutationRow, QueryOptions, QuerySource, SelectColumn, Sort, SortDirection,
-    SubquerySource, Value, build_delete, build_insert, build_query, build_update, build_upsert,
+    SubquerySource, Value, build_delete, build_insert, build_merge, build_query, build_update,
+    build_upsert,
 };
 use postgres::types::ToSql;
 use postgres::{Client, NoTls, Row};
@@ -263,6 +264,13 @@ fn widget_options(rows: Vec<MutationRow>) -> MutationOptions {
     }
 }
 
+fn merge_widget_options(rows: Vec<MutationRow>) -> MutationOptions {
+    MutationOptions {
+        table: "merge_widgets".to_owned(),
+        ..widget_options(rows)
+    }
+}
+
 fn membership_options(rows: Vec<MutationRow>) -> MutationOptions {
     MutationOptions {
         table: "memberships".to_owned(),
@@ -429,6 +437,15 @@ fn executes_mutation_builders_against_pglite() {
                 role text NOT NULL,
                 PRIMARY KEY (tenant_id, user_id)
             );
+
+            CREATE TABLE merge_widgets (
+                id bigint PRIMARY KEY,
+                name text NOT NULL,
+                note text,
+                created_at text NOT NULL,
+                updated_at text NOT NULL,
+                version bigint NOT NULL
+            );
             "#,
         )
         .expect("failed to create mutation test tables");
@@ -594,6 +611,116 @@ fn executes_mutation_builders_against_pglite() {
         .query(r#"SELECT "id" FROM "widgets" ORDER BY "id""#, &[])
         .unwrap();
     assert_eq!(ids(&remaining), vec![100, 9000]);
+
+    client
+        .batch_execute(
+            r#"
+            INSERT INTO merge_widgets (id, name, note, created_at, updated_at, version)
+            VALUES (100, 'alpha', 'old-note', 'c0', 'u0', 3);
+            "#,
+        )
+        .expect("failed to seed merge test data");
+
+    let merge = build_merge(&merge_widget_options(vec![
+        mutation_row(&[
+            ("id", Value::Int(100)),
+            ("version", Value::Int(3)),
+            ("name", text("patched")),
+            ("created_at", text("ignored")),
+        ]),
+        mutation_row(&[
+            ("id", Value::Int(200)),
+            ("name", text("new")),
+            ("note", text("new-note")),
+            ("updated_at", text("u2")),
+            ("version", Value::Int(1)),
+        ]),
+        mutation_row(&[
+            ("id", Value::Int(100)),
+            ("version", Value::Int(2)),
+            ("name", text("stale")),
+            ("created_at", text("ignored2")),
+        ]),
+    ]))
+    .unwrap();
+    run(&mut client, &merge);
+
+    let merged = client
+        .query(
+            r#"SELECT "id", "name", "note", "version" FROM "merge_widgets" ORDER BY "id""#,
+            &[],
+        )
+        .unwrap();
+    assert_eq!(
+        merged
+            .iter()
+            .map(|row| {
+                (
+                    row.get::<_, i64>("id"),
+                    row.get::<_, String>("name"),
+                    row.get::<_, Option<String>>("note"),
+                    row.get::<_, i64>("version"),
+                )
+            })
+            .collect::<Vec<_>>(),
+        vec![
+            (100, "patched".to_owned(), Some("old-note".to_owned()), 4),
+            (200, "new".to_owned(), Some("new-note".to_owned()), 1),
+        ]
+    );
+
+    let timestamps = client
+        .query(
+            r#"SELECT "id", "created_at", "updated_at" FROM "merge_widgets" ORDER BY "id""#,
+            &[],
+        )
+        .unwrap();
+    assert_eq!(timestamps[0].get::<_, String>("created_at"), "c0");
+    assert_ne!(timestamps[0].get::<_, String>("updated_at"), "u0");
+    assert_eq!(timestamps[1].get::<_, String>("updated_at"), "u2");
+
+    let merge = build_merge(&merge_widget_options(vec![
+        mutation_row(&[
+            ("id", Value::Int(200)),
+            ("version", Value::Int(1)),
+            ("note", Value::Null),
+        ]),
+        mutation_row(&[
+            ("id", Value::Int(300)),
+            ("name", text("new3")),
+            ("note", text("n3")),
+            ("created_at", text("c3")),
+            ("updated_at", text("u3")),
+            ("version", Value::Int(1)),
+        ]),
+    ]))
+    .unwrap();
+    run(&mut client, &merge);
+
+    let patched = client
+        .query(
+            r#"SELECT "id", "name", "note", "version" FROM "merge_widgets" ORDER BY "id""#,
+            &[],
+        )
+        .unwrap();
+    assert_eq!(
+        patched
+            .iter()
+            .map(|row| {
+                (
+                    row.get::<_, i64>("id"),
+                    row.get::<_, String>("name"),
+                    row.get::<_, Option<String>>("note"),
+                    row.get::<_, i64>("version"),
+                )
+            })
+            .collect::<Vec<_>>(),
+        vec![
+            (100, "patched".to_owned(), Some("old-note".to_owned()), 4),
+            (200, "new".to_owned(), None, 2),
+            (300, "new3".to_owned(), Some("n3".to_owned()), 1),
+        ]
+    );
 
     let insert = build_insert(&membership_options(vec![
         mutation_row(&[
