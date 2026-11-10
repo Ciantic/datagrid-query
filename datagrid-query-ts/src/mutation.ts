@@ -6,6 +6,7 @@ import type {
   MutationParamSpec,
 } from "./types.js";
 
+/** @internal */
 export interface MutationContext {
   table: string;
   tableName: string;
@@ -16,6 +17,7 @@ export interface MutationContext {
   returning: string[];
 }
 
+/** @internal */
 export function mutationContext(options: MutationOptions): MutationContext {
   const tableName = quoteIdentifier(options.table, "table");
   const table =
@@ -96,6 +98,7 @@ export function mutationContext(options: MutationOptions): MutationContext {
   };
 }
 
+/** @internal */
 export function mutationColumn(context: MutationContext, name: string): MutationColumn {
   const column = context.columns.get(name);
   if (column === undefined) {
@@ -105,6 +108,7 @@ export function mutationColumn(context: MutationContext, name: string): Mutation
   return column;
 }
 
+/** @internal */
 export function pushParamSpec(
   specs: MutationParamSpec[],
   kind: MutationParamKind,
@@ -115,6 +119,7 @@ export function pushParamSpec(
   return `$${specs.length}::${type}[]`;
 }
 
+/** @internal */
 export function renderMutationReturning(context: MutationContext, qualifier: string): string {
   if (context.returning.length === 0) {
     return "";
@@ -126,6 +131,7 @@ export function renderMutationReturning(context: MutationContext, qualifier: str
   return ` RETURNING ${columns.join(", ")}`;
 }
 
+/** @internal */
 export function renderInsertSelect(
   options: MutationOptions,
   context: MutationContext,

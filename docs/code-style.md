@@ -43,6 +43,21 @@ pub fn quote_identifier(name: &str) -> Result<String, InvalidIdentifier> {
 export function buildQuery(options: QueryOptions): BuiltQuery {
 ```
 
+## Mark TypeScript internal exports
+
+The package entry point (`src/index.ts`) defines the public TypeScript API. A
+declaration exported from another module only so that package code can use it
+must be marked with a one-line `@internal` JSDoc tag.
+
+```ts
+/** @internal */
+export function quoteIdentifier(value: string, kind: string): string {
+```
+
+Public exports re-exported from `src/index.ts` do not need the tag. Rust does
+not need this annotation because `pub`, `pub(crate)`, and module privacy express
+visibility directly.
+
 ## Enforcement
 
 No automated check is in place yet. When implementation work resumes, add a
