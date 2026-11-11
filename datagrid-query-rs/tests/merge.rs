@@ -44,7 +44,7 @@ fn builds_merge_with_per_field_patch_semantics() {
 
 #[test]
 fn accepts_typescript_merge_json() {
-    let json = include_str!("../../fixtures/upsert-options.json");
+    let json = include_str!("fixtures/upsert-options.json");
     let options: MutationOptions = serde_json::from_str(json).unwrap();
     let mutation = build_merge(&options).unwrap();
     let rows = vec![

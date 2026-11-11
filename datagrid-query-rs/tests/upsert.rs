@@ -38,7 +38,7 @@ fn builds_upsert_with_conflict_update_and_version_locking() {
 
 #[test]
 fn accepts_typescript_upsert_json() {
-    let json = include_str!("../../fixtures/upsert-options.json");
+    let json = include_str!("fixtures/upsert-options.json");
     let fixture: serde_json::Value = serde_json::from_str(json).unwrap();
     let options: MutationOptions = serde_json::from_value(fixture.clone()).unwrap();
 

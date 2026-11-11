@@ -48,7 +48,7 @@ export function membershipOptions(): MutationOptions {
 }
 
 export const upsertFixture = JSON.parse(
-  readFileSync(new URL("../../fixtures/upsert-options.json", import.meta.url), "utf8"),
+  readFileSync(new URL("./fixtures/upsert-options.json", import.meta.url), "utf8"),
 ) as MutationOptions;
 
 export const upsertFixtureRows: MutationRow[] = [

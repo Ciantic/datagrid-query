@@ -1,0 +1,39 @@
+{
+  "table": "widgets",
+  "columns": [
+    {
+      "name": "id",
+      "type": "bigint",
+      "insertDefaultSql": "9000"
+    },
+    {
+      "name": "name",
+      "type": "text"
+    },
+    {
+      "name": "note",
+      "type": "text"
+    },
+    {
+      "name": "created_at",
+      "type": "text",
+      "insertDefaultSql": "now()::text",
+      "updatable": false
+    },
+    {
+      "name": "updated_at",
+      "type": "text",
+      "insertDefaultSql": "now()::text",
+      "updateDefaultSql": "now()::text"
+    },
+    {
+      "name": "version",
+      "type": "bigint",
+      "insertDefaultSql": "1"
+    }
+  ],
+  "primaryKey": [
+    "id"
+  ],
+  "versionColumn": "version"
+}

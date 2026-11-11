@@ -165,10 +165,12 @@ with `bindMutationRows`; Rust binds the same metadata and rows with
 `bind_mutation_rows`.
 
 `BuiltMutation` also serializes in Rust, so the SQL and parameter specification
-can be transported between languages before rows are bound. The shared fixture
-`fixtures/upsert-options.json` is consumed by both test suites: the TypeScript
-suite parses and builds it, and the Rust suite deserializes it, re-serializes
-it, and builds the same upsert and merge.
+can be transported between languages before rows are bound. The fixture
+`upsert-options.json` exists in both test suites:
+`datagrid-query-rs/tests/fixtures/upsert-options.json` is deserialized,
+re-serialized, and built into the same upsert and merge by the Rust suite, and
+`datagrid-query-ts/test/fixtures/upsert-options.json` is parsed and built by the
+TypeScript suite. Keep the two copies identical.
 
 The bridge uses these rules:
 
